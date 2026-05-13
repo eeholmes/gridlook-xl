@@ -28,3 +28,5 @@ tsconfig.tsbuildinfo
 *.njsproj
 *.sln
 *.sw?
+.Rproj.user
+*.Rproj
