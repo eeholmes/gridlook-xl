@@ -13,8 +13,8 @@
       "tag": "regular"
     },
     {
-      "title": "50km HighResMIP HadGEM3 highres-future Amon tas",
-      "url": "https://storage.googleapis.com/cmip6/CMIP6/HighResMIP/MOHC/HadGEM3-GC31-HM/highresSST-present/r1i1p1f1/Amon/tas/gn/v20170831/",
+      "title": "MUR High-Res SST",
+      "url": "https://mur.s3.us-west-2.amazonaws.com/mur-sst/zarr-v1/",
       "tag": "regular"
     },
     {
