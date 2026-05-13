@@ -4,22 +4,25 @@ import {
   projectionShaderFunctions,
   PROJECTION_TYPE_BY_MODE,
   getProjectionTypeFromMode,
-} from "../projection/projectionShaders";
+} from "../projection/projectionShaders.ts";
 import {
   PROJECTION_TYPES,
   type ProjectionHelper,
-} from "../projection/projectionUtils";
+} from "../projection/projectionUtils.ts";
 
 import {
   applyColormapShaders,
   availableColormaps,
   colormapShaders,
   type TColorMap,
-} from "./colormapShaders";
+} from "./colormapShaders.ts";
 
 const isNaNGLSL = `
-bool is_nan(float v) {
-    return v != v;
+bool is_nan(float val) {
+    uint bits = floatBitsToUint(val);
+    // exponent all 1s (0x7F800000) AND non-zero mantissa = NaN
+    // exponent all 1s AND zero mantissa = Infinity (not NaN)
+    return (bits & 0x7F800000u) == 0x7F800000u && (bits & 0x007FFFFFu) != 0u;
 }
 `;
 
@@ -43,10 +46,9 @@ ${posterizeGLSL}
 
 uniform float addOffset;
 uniform float scaleFactor;
-uniform float missingValue;
-uniform float fillValue;
 uniform int colormap;
 uniform float posterizeLevels;
+uniform float hideBelowValue;
 uniform sampler2D data;
 
 varying vec2 vUv;
@@ -54,7 +56,7 @@ varying vec2 vUv;
 void main() {
     gl_FragColor.a = 1.0;
     float v_value = texture(data, vUv).r;
-    if (is_nan(v_value) || v_value == fillValue || v_value == missingValue) {
+    if (is_nan(v_value) || v_value <= hideBelowValue) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
@@ -77,12 +79,11 @@ varying float v_value;
 uniform float addOffset;
 uniform float scaleFactor;
 uniform int colormap;
-uniform float missingValue;
-uniform float fillValue;
 uniform float posterizeLevels;
+uniform float hideBelowValue;
 
 void main() {
-    if (is_nan(v_value) || v_value == fillValue || v_value == missingValue) {
+    if (is_nan(v_value) || v_value <= hideBelowValue) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
@@ -114,9 +115,8 @@ varying float v_value;
 uniform float addOffset;
 uniform float scaleFactor;
 uniform int colormap;
-uniform float fillValue;
-uniform float missingValue;
 uniform float posterizeLevels;
+uniform float hideBelowValue;
 
 void main() {
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
@@ -130,7 +130,7 @@ void main() {
     if (falloff < 0.01) discard; // Optional: discard transparent fragments
 
 
-    if (is_nan(v_value) || v_value == fillValue || v_value == missingValue) {
+    if (is_nan(v_value) || v_value <= hideBelowValue) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
@@ -138,25 +138,6 @@ void main() {
     ${applyColormapShaders}
     gl_FragColor.a = falloff;
 }`;
-
-export function makeColormapLutMaterial(
-  colormap: TColorMap = "turbo",
-  addOffset: 0 | 1,
-  scaleFactor: 1 | -1
-) {
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      addOffset: { value: addOffset },
-      scaleFactor: { value: scaleFactor },
-      colormap: { value: availableColormaps[colormap] },
-      posterizeLevels: { value: 0.0 },
-    },
-
-    vertexShader: screenQuadValueVertexShader,
-    fragmentShader: scalarColormapFragmentShader,
-  });
-  return material;
-}
 
 const compressedLutFragmentShader = `
 ${colormapShaders}
@@ -359,9 +340,8 @@ export function makeGpuProjectedTextureMaterial(
       addOffset: { value: addOffset },
       scaleFactor: { value: scaleFactor },
       colormap: { value: availableColormaps[colormap] },
-      fillValue: { value: Number.POSITIVE_INFINITY },
-      missingValue: { value: Number.POSITIVE_INFINITY },
       posterizeLevels: { value: 0.0 },
+      hideBelowValue: { value: -1e38 },
       data: { value: texture },
       // Projection uniforms
       projectionType: {
@@ -393,9 +373,8 @@ export function makeGpuProjectedMeshMaterial(
       scaleFactor: { value: scaleFactor },
       pointSize: { value: 0.0 },
       colormap: { value: availableColormaps[colormap] },
-      fillValue: { value: Number.POSITIVE_INFINITY },
-      missingValue: { value: Number.POSITIVE_INFINITY },
       posterizeLevels: { value: 0.0 },
+      hideBelowValue: { value: -1e38 },
       // Projection uniforms
       projectionType: {
         value: PROJECTION_TYPE_BY_MODE[PROJECTION_TYPES.NEARSIDE_PERSPECTIVE],
@@ -427,9 +406,8 @@ export function makeGpuProjectedPointMaterial(
       basePointSize: { value: 5.0 },
       minPointSize: { value: 1.0 },
       maxPointSize: { value: 10.0 },
-      fillValue: { value: Number.POSITIVE_INFINITY },
-      missingValue: { value: Number.POSITIVE_INFINITY },
       posterizeLevels: { value: 0.0 },
+      hideBelowValue: { value: -1e38 },
       colormap: { value: availableColormaps[colormap] },
       // Projection uniforms
       projectionType: {
@@ -470,4 +448,6 @@ export function updateProjectionUniforms(
   if (material.uniforms.projectionRadius) {
     material.uniforms.projectionRadius.value = radius;
   }
+  material.depthTest =
+    projectionHelper.type === PROJECTION_TYPES.NEARSIDE_PERSPECTIVE;
 }

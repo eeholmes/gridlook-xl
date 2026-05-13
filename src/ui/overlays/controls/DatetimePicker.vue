@@ -1,14 +1,14 @@
 <script lang="ts" setup>
 import dayjs, { Dayjs } from "dayjs";
-import utc from "dayjs/plugin/utc";
+import utc from "dayjs/plugin/utc.js";
 import DatePicker from "primevue/datepicker";
 import { computed, ref, watch } from "vue";
 
-import { findTimeIndex, decodeTime } from "@/lib/data/timeHandling";
+import { findTimeIndex, decodeTime } from "@/lib/data/timeHandling.ts";
 import Modal from "@/ui/common/Modal.vue";
 
 const props = defineProps<{
-  timeValues: ArrayLike<number | bigint> | null;
+  timeValues: ArrayLike<number | bigint | string> | null;
   timeAttrs: Record<string, unknown> | null;
   currentIndex: number;
   minIndex: number;
@@ -29,38 +29,32 @@ const errorMessage = ref<string | null>(null);
 
 // Compute the datetime range for display
 const minDatetime = computed(() => {
-  if (!props.timeValues || !props.timeAttrs || props.timeValues.length === 0) {
-    return null;
-  }
-  const val = props.timeValues[props.minIndex];
-  return decodeTime(
-    typeof val === "bigint" ? Number(val) : val,
-    props.timeAttrs
-  );
+  return decodeTimeAtIndex(props.minIndex);
 });
 
 const maxDatetime = computed(() => {
-  if (!props.timeValues || !props.timeAttrs || props.timeValues.length === 0) {
-    return null;
-  }
-  const val = props.timeValues[props.maxIndex];
-  return decodeTime(
-    typeof val === "bigint" ? Number(val) : val,
-    props.timeAttrs
-  );
+  return decodeTimeAtIndex(props.maxIndex);
 });
 
 // Current datetime at the selected index
 const currentDatetime = computed(() => {
+  return decodeTimeAtIndex(props.currentIndex);
+});
+
+function decodeTimeAtIndex(index: number): Dayjs | null {
   if (!props.timeValues || !props.timeAttrs || props.timeValues.length === 0) {
     return null;
   }
-  const val = props.timeValues[props.currentIndex];
+  const val = props.timeValues[index];
   return decodeTime(
-    typeof val === "bigint" ? Number(val) : val,
+    typeof val === "bigint"
+      ? Number(val)
+      : typeof val === "string"
+        ? Number(val)
+        : val,
     props.timeAttrs
   );
-});
+}
 
 // Initialize input with current datetime when opening
 watch(isOpen, (open) => {
@@ -105,11 +99,7 @@ function onInputChange() {
     previewIndex.value = index;
 
     // Show the actual datetime at that index
-    const val = props.timeValues[index];
-    previewDatetime.value = decodeTime(
-      typeof val === "bigint" ? Number(val) : val,
-      props.timeAttrs
-    );
+    previewDatetime.value = decodeTimeAtIndex(index);
   } catch (e) {
     errorMessage.value =
       e instanceof Error ? e.message : "Error parsing datetime";
@@ -229,6 +219,7 @@ function openPicker() {
 
     <template #footer>
       <div class="buttons">
+        <button class="button" type="button" @click="onCancel">Cancel</button>
         <button
           class="button is-success"
           :disabled="previewIndex === null"
@@ -240,7 +231,6 @@ function openPicker() {
           </span>
           <span>Apply</span>
         </button>
-        <button class="button" type="button" @click="onCancel">Cancel</button>
       </div>
     </template>
   </Modal>

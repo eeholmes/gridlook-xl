@@ -1,15 +1,17 @@
 <script lang="ts" setup>
 import { useEventListener } from "@vueuse/core";
-import { storeToRefs } from "pinia";
 import { ref, onBeforeMount, type Ref } from "vue";
 
 import GlobeView from "./GlobeView.vue";
 
-import { GRID_TYPES, type T_GRID_TYPES } from "@/lib/data/gridTypeDetector";
-import { STORE_PARAM_MAPPING, useUrlParameterStore } from "@/store/paramStore";
-import { useGlobeControlStore } from "@/store/store";
-import { isDisplayMode, isPresenterActive } from "@/store/usePresenterSync";
-import type { TURLParameterValues } from "@/utils/urlParams";
+import { GRID_TYPES, type T_GRID_TYPES } from "@/lib/data/gridTypeDetector.ts";
+import {
+  STORE_PARAM_MAPPING,
+  useUrlParameterStore,
+} from "@/store/paramStore.ts";
+import { useGlobeControlStore } from "@/store/store.ts";
+import { isDisplayMode, isPresenterActive } from "@/store/usePresenterSync.ts";
+import type { TURLParameterValues } from "@/utils/urlParams.ts";
 
 type TParams = Partial<Record<TURLParameterValues, string>>;
 
@@ -23,7 +25,6 @@ const src = ref(DEFAULT_DATASET);
 const params: Ref<TParams> = ref({});
 
 const store = useGlobeControlStore();
-const { userBoundsLow, userBoundsHigh } = storeToRefs(store);
 
 const urlParameterStore = useUrlParameterStore();
 
@@ -42,13 +43,6 @@ const onHashChange = () => {
 
     params.value = Object.fromEntries(new URLSearchParams(paramString));
 
-    if (
-      params.value.boundlow !== undefined &&
-      params.value.boundhigh !== undefined
-    ) {
-      userBoundsLow.value = parseFloat(params.value.boundlow);
-      userBoundsHigh.value = parseFloat(params.value.boundhigh);
-    }
     for (const [key, value] of Object.entries(params.value) as [
       keyof typeof STORE_PARAM_MAPPING,
       string,

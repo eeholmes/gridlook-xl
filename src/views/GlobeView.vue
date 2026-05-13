@@ -7,32 +7,32 @@ import type {
   TModelInfo,
   TSnapshotOptions,
   TSources,
-} from "../lib/types/GlobeTypes";
+} from "../lib/types/GlobeTypes.ts";
 
 import {
   getGridType,
   GRID_TYPES,
   type T_GRID_TYPES,
-} from "@/lib/data/gridTypeDetector";
-import { indexFromIndex, indexFromZarr } from "@/lib/data/sourceIndexing";
-import { ZarrDataManager } from "@/lib/data/ZarrDataManager";
-import { PROJECTION_TYPES, clamp } from "@/lib/projection/projectionUtils";
+} from "@/lib/data/gridTypeDetector.ts";
+import { indexFromIndex, indexFromZarr } from "@/lib/data/sourceIndexing.ts";
+import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
+import { PROJECTION_TYPES, clamp } from "@/lib/projection/projectionUtils.ts";
 import {
   availableColormaps,
   type TColorMap,
-} from "@/lib/shaders/colormapShaders";
-import { PresenterRole } from "@/lib/types/presenterSync";
-import { useUrlParameterStore } from "@/store/paramStore";
-import { useGlobeControlStore } from "@/store/store";
+} from "@/lib/shaders/colormapShaders.ts";
+import { PresenterRole } from "@/lib/types/presenterSync.ts";
+import { useUrlParameterStore } from "@/store/paramStore.ts";
+import { useGlobeControlStore } from "@/store/store.ts";
 import {
   usePresenterSync,
   isDisplayMode,
   isPresenterActive,
-} from "@/store/usePresenterSync";
-import { useUrlSync } from "@/store/useUrlSync";
+} from "@/store/usePresenterSync.ts";
+import { useUrlSync } from "@/store/useUrlSync.ts";
 import Toast from "@/ui/common/Toast.vue";
-import { isMobileDevice } from "@/ui/common/viewConstants";
-import type { TCameraState } from "@/ui/grids/composables/useGridCameraState";
+import { isMobileDevice } from "@/ui/common/viewConstants.ts";
+import type { TCameraState } from "@/ui/grids/composables/useGridCameraState.ts";
 import GridCurvilinear from "@/ui/grids/Curvilinear.vue";
 import GridGaussianReduced from "@/ui/grids/GaussianReduced.vue";
 import GridHealpix from "@/ui/grids/Healpix.vue";
@@ -44,7 +44,7 @@ import AboutView from "@/ui/overlays/AboutModal.vue";
 import GlobeControls from "@/ui/overlays/Controls.vue";
 import HoverReadout from "@/ui/overlays/HoverReadout.vue";
 import InfoPanel from "@/ui/overlays/InfoPanel.vue";
-import { useLog } from "@/utils/logging";
+import { useLog } from "@/utils/logging.ts";
 
 const props = defineProps<{ src: string }>();
 
@@ -90,7 +90,8 @@ if (urlParams.get("mode") === PresenterRole.DISPLAY) {
 const { varnameSelector, loading, colormap, invertColormap } =
   storeToRefs(store);
 
-const { paramVarname, paramGridType } = storeToRefs(urlParameterStore);
+const { paramVarname, paramGridType, paramDistractionFree } =
+  storeToRefs(urlParameterStore);
 
 type TGlobeHandle = {
   makeSnapshot: (options: TSnapshotOptions) => void;
@@ -101,10 +102,6 @@ type TGlobeHandle = {
 const HYPERGLOBE_CAMERA_PRESET: TCameraState = {
   position: [0, 0, 33],
   quaternion: [0, 0, 0, 1],
-  fov: 7.5,
-  aspect: 1,
-  near: 0.1,
-  far: 1000,
 };
 
 const globe: Ref<TGlobeHandle | null> = ref(null);
@@ -118,6 +115,13 @@ const sourceValid = ref(false);
 const datasources: Ref<TSources | undefined> = ref(undefined);
 const detectedGridType: Ref<T_GRID_TYPES | undefined> = ref(undefined);
 const infoPanelOpen = ref(false);
+
+const distractionFreeFromUrl = paramDistractionFree.value === "true";
+
+if (distractionFreeFromUrl && !isDisplayMode.value) {
+  distractionFree.value = true;
+  store.setControlPanelVisible(false);
+}
 
 const activeGridType = computed(() => {
   const detected = detectedGridType.value;
@@ -355,6 +359,23 @@ onMounted(async () => {
   isInitialized.value = true;
   await setGridType();
 });
+
+// Prevent the long-press context menu on touch-enabled devices (e.g. touchscreen
+// laptops) while still allowing right-click context menus from a regular mouse.
+let lastPointerType = "mouse";
+useEventListener(window, "pointerdown", (e: PointerEvent) => {
+  lastPointerType = e.pointerType;
+});
+useEventListener(
+  window,
+  "contextmenu",
+  (e: MouseEvent) => {
+    if (lastPointerType === "touch") {
+      e.preventDefault();
+    }
+  },
+  { capture: true }
+);
 
 useEventListener(window, "keydown", (e: KeyboardEvent) => {
   if (isDisplayMode.value) {

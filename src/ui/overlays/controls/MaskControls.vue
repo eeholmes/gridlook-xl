@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { storeToRefs } from "pinia";
 
-import { useGlobeControlStore } from "@/store/store";
+import { useGlobeControlStore } from "@/store/store.ts";
 
 const store = useGlobeControlStore();
 const { landSeaMaskChoice, landSeaMaskUseTexture } = storeToRefs(store);
@@ -46,6 +46,7 @@ const { landSeaMaskChoice, landSeaMaskUseTexture } = storeToRefs(store);
           />
           <label
             for="use_texture"
+            title="Earth texture credit: NASA"
             :class="{
               'has-text-grey-light': landSeaMaskChoice === 'off',
             }"

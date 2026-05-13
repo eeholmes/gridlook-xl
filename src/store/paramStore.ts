@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import type { TColorMap } from "@/lib/shaders/colormapShaders";
+import type { TColorMap } from "@/lib/shaders/colormapShaders.ts";
 // import type { TURLParameterValues } from "../utils/urlParams";
 
 /* Initial values of SOME of the URL parameters.
@@ -19,11 +19,15 @@ export const useUrlParameterStore = defineStore("urlParams", {
       paramColormap: undefined as TColorMap | undefined,
       paramInvertColormap: undefined as string | undefined,
       paramPosterizeLevels: undefined as string | undefined,
+      paramHideLowerBound: undefined as string | undefined,
+      paramDistractionFree: undefined as string | undefined,
       paramMaskMode: undefined as string | undefined,
       paramMaskingUseTexture: undefined as string | undefined,
       paramDimIndices: {} as Record<string, string>,
       paramDimMinBounds: {} as Record<string, string>,
       paramDimMaxBounds: {} as Record<string, string>,
+      paramBoundLow: undefined as string | undefined,
+      paramBoundHigh: undefined as string | undefined,
       paramProjection: undefined as string | undefined,
       paramProjectionCenterLat: undefined as string | undefined,
       paramProjectionCenterLon: undefined as string | undefined,
@@ -59,6 +63,8 @@ export const STORE_PARAM_MAPPING = {
   camerastate: "paramCameraState",
   invertcolormap: "paramInvertColormap",
   posterizelevels: "paramPosterizeLevels",
+  hidelowerbound: "paramHideLowerBound",
+  distractionFree: "paramDistractionFree",
   maskmode: "paramMaskMode",
   maskusetexture: "paramMaskingUseTexture",
   dimIndices: "paramDimIndices",
@@ -67,6 +73,8 @@ export const STORE_PARAM_MAPPING = {
   projection: "paramProjection",
   projectionCenterLat: "paramProjectionCenterLat",
   projectionCenterLon: "paramProjectionCenterLon",
+  boundlow: "paramBoundLow",
+  boundhigh: "paramBoundHigh",
   gridtype: "paramGridType",
   catalog: "paramCatalog",
 } as const;

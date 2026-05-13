@@ -16,6 +16,7 @@ import {
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
+  mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
 import {
@@ -110,6 +111,7 @@ watch(
     () => invertColormap.value,
     () => colormap.value,
     () => posterizeLevels.value,
+    () => store.hideLowerBound,
   ],
   () => {
     updateColormap(meshes);
@@ -412,7 +414,7 @@ async function getDimensionValues(
 }
 
 async function buildDimensionConfig(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const dimensionNames = await ZarrDataManager.getDimensionNames(
@@ -433,7 +435,7 @@ async function buildDimensionConfig(
 }
 
 async function fetchAndRenderData(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const { dimensionRanges, indices } = await buildDimensionConfig(
@@ -453,6 +455,7 @@ async function fetchAndRenderData(
   const longitudesData = longitudes!.data as Float64Array;
 
   let { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
+  rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
 
   buildGaussianReducedGeometry(latitudesData, longitudesData, rawData);
 
@@ -465,12 +468,6 @@ async function fetchAndRenderData(
 
   // Set projection uniforms on all meshes after grid creation
   updateMeshProjectionUniforms();
-
-  for (let mesh of meshes) {
-    const material = mesh.material as THREE.ShaderMaterial;
-    material.uniforms.missingValue.value = missingValue;
-    material.uniforms.fillValue.value = fillValue;
-  }
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
   updateHistogram(rawData, min, max, missingValue, fillValue);

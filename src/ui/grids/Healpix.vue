@@ -13,7 +13,11 @@ import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
-import { castDataVarToFloat32, getDataBounds } from "@/lib/data/zarrUtils.ts";
+import {
+  castDataVarToFloat32,
+  getDataBounds,
+  mapMissingAndFillToNaN,
+} from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
 import {
   getColormapScaleOffset,
@@ -133,6 +137,7 @@ watch(
     () => invertColormap.value,
     () => colormap.value,
     () => posterizeLevels.value,
+    () => store.hideLowerBound,
   ],
   () => {
     updateColormap(mainMeshes);
@@ -207,7 +212,7 @@ async function getNside() {
 
 async function getCells() {
   try {
-    let cells = (
+    const rawCells = (
       await ZarrDataManager.getVariableData(
         ZarrDataManager.getDatasetSource(
           props.datasources!,
@@ -215,11 +220,9 @@ async function getCells() {
         ),
         "cell"
       )
-    ).data as Int32Array | BigInt64Array | number[];
-    if (typeof cells[0] === "bigint") {
-      cells = Array.from(cells, Number) as number[];
-    }
-    return cells as number[];
+    ).data as ArrayLike<number | bigint>;
+
+    return Array.from(rawCells, (cell) => Number(cell));
   } catch {
     return undefined;
   }
@@ -234,7 +237,7 @@ function getHealpixChunkRange(ipix: number, numChunks: number, nside: number) {
 }
 
 async function fillGlobalHealpixChunkData(
-  datavar: zarr.Array<zarr.DataType>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   localDimensionIndices: (number | zarr.Slice | null)[],
   pixelStart: number,
   pixelEnd: number,
@@ -255,7 +258,7 @@ async function fillGlobalHealpixChunkData(
 }
 
 async function fillLimitedAreaHealpixChunkData(
-  datavar: zarr.Array<zarr.DataType>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   cellCoord: number[],
   localDimensionIndices: (number | zarr.Slice | null)[],
   pixelStart: number,
@@ -315,7 +318,7 @@ async function fillLimitedAreaHealpixChunkData(
 }
 
 async function fillHealpixChunkData(
-  datavar: zarr.Array<zarr.DataType>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   cellCoord: number[] | undefined,
   localDimensionIndices: (number | zarr.Slice | null)[],
   pixelStart: number,
@@ -343,7 +346,7 @@ async function fillHealpixChunkData(
 }
 
 async function getHealpixData(
-  datavar: zarr.Array<zarr.DataType>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   cellCoord: number[] | undefined, // Optional - undefined for global data
   ipix: number,
   numChunks: number,
@@ -373,6 +376,8 @@ async function getHealpixData(
   } else if (isNaN(fillValue)) {
     fillValue = HEALPIX_UNSEEN;
   }
+  mapMissingAndFillToNaN(dataSlice, missingValue, fillValue);
+  ({ min, max } = getDataBounds(datavar, dataSlice));
 
   // Filter out missing and fill values before building histogram
   return {
@@ -587,7 +592,7 @@ async function getData(updateMode: TUpdateMode = UPDATE_MODE.INITIAL_LOAD) {
 }
 
 async function prepareDimensionData(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const dimensionNames = await ZarrDataManager.getDimensionNames(
@@ -623,7 +628,7 @@ async function getDimensionValues(
 }
 
 async function processHealpixChunks(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   cellCoord: number[] | undefined,
   nside: number,
   indices: (number | zarr.Slice | null)[]
@@ -657,8 +662,6 @@ async function processHealpixChunks(
       dataMax = dataMax < texData.max ? texData.max : dataMax;
 
       const material = mainMeshes[ipix].material as THREE.ShaderMaterial;
-      material.uniforms.missingValue.value = texData.missingValue;
-      material.uniforms.fillValue.value = texData.fillValue;
       material.uniforms.data.value.dispose();
       material.uniforms.data.value = texData.texture;
 
@@ -713,7 +716,7 @@ function healpixHoverLookup(
 }
 
 async function fetchAndRenderData(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const { dimensionRanges, indices } = await prepareDimensionData(
@@ -727,9 +730,22 @@ async function fetchAndRenderData(
   hoverData.value = castDataVarToFloat32(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
-  hoverCellIndexMap.value = cellCoord
-    ? new Map(cellCoord.map((pixel, index) => [pixel, index]))
-    : null;
+  let { missingValue, fillValue } = getDataBounds(datavar, hoverData.value);
+  if (isNaN(missingValue)) {
+    missingValue = HEALPIX_UNSEEN;
+  } else if (isNaN(fillValue)) {
+    fillValue = HEALPIX_UNSEEN;
+  }
+  mapMissingAndFillToNaN(hoverData.value, missingValue, fillValue);
+  if (cellCoord) {
+    const cellIndexMap = new Map<number, number>();
+    for (let index = 0; index < cellCoord.length; index++) {
+      cellIndexMap.set(cellCoord[index], index);
+    }
+    hoverCellIndexMap.value = cellIndexMap;
+  } else {
+    hoverCellIndexMap.value = null;
+  }
   setHoverLookup(healpixHoverLookup);
   const { dataMin, dataMax, histogramSummaries } = await processHealpixChunks(
     datavar,

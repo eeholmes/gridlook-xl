@@ -15,7 +15,7 @@ import type {
   TDimensionRange,
   TSources,
   TDimInfo,
-} from "@/lib/types/GlobeTypes";
+} from "@/lib/types/GlobeTypes.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
 import {
   HISTOGRAM_SUMMARY_BINS,
@@ -38,6 +38,7 @@ export function useSharedGridLogic() {
     colormap,
     invertColormap,
     posterizeLevels,
+    hideLowerBound,
     controlPanelVisible,
     projectionMode,
     projectionCenter,
@@ -173,6 +174,11 @@ export function useSharedGridLogic() {
       if (material.uniforms.posterizeLevels) {
         material.uniforms.posterizeLevels.value = posterizeLevels.value;
       }
+      if (material.uniforms.hideBelowValue) {
+        material.uniforms.hideBelowValue.value = hideLowerBound.value
+          ? low
+          : -1e38;
+      }
       material.needsUpdate = true;
     }
     redraw();
@@ -185,19 +191,21 @@ export function useSharedGridLogic() {
     dimSlidersValues: (number | zarr.Slice | null)[]
   ): Promise<TDimInfo[]> {
     const array: TDimInfo[] = [];
-    for (const dim of dimensionRanges) {
+    for (let i = 0; i < dimensionRanges.length; i++) {
+      const dim = dimensionRanges[i];
       if (dim?.name === "time") {
         const timeInfo = await getTimeInfo(
           datasources,
           dimensionRanges,
-          dimSlidersValues[0] as number
+          i,
+          dimSlidersValues[i] as number
         );
         array.push(timeInfo);
       } else {
         const dimInfo = await getDimensionInfo(
           datasources.levels[0].datasources[currentVariable],
           dim!,
-          dimSlidersValues[dimensionRanges.indexOf(dim)] as number
+          dimSlidersValues[i] as number
         );
         array.push(dimInfo);
       }

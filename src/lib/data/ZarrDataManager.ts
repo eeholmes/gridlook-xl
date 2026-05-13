@@ -1,11 +1,7 @@
+import QuickLRU from "quick-lru";
 import * as zarr from "zarrita";
 
-import { lru } from "@/lib/data/lruStore";
-import type {
-  TDataSource,
-  TSources,
-  TZarrV3RootMetadata,
-} from "@/lib/types/GlobeTypes";
+import type { TDataSource, TSources } from "@/lib/types/GlobeTypes.ts";
 
 export type TZarrDatasetMetadata = {
   attrs: zarr.Attributes;
@@ -24,9 +20,10 @@ export type TZarrVariableMetadata = {
 };
 
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
-
 export class ZarrDataManager {
-  private static fetchStore: zarr.Location<zarr.FetchStore> | null = null;
+  private static pendingStore: Promise<
+    zarr.Location<zarr.AsyncReadable>
+  > | null = null;
   private static fetchStorePath: string | null = null;
 
   private static normalizeStorePath(store: string) {
@@ -37,46 +34,46 @@ export class ZarrDataManager {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }
 
+  public static async createNewStore(storePath: string) {
+    const cache = new QuickLRU<string, Uint8Array | undefined>({
+      maxSize: 512,
+    });
+    const fetchStore = zarr.extendStore(
+      new zarr.FetchStore(storePath, { useSuffixRequest: true }),
+      (s) => zarr.withRangeCoalescing(s, { coalesceSize: 32768 }),
+      (s) => zarr.withByteCaching(s, { cache: cache })
+    );
+    return fetchStore;
+  }
+
   private static async getDataset(
     datasource: TDatasetSource
-  ): Promise<zarr.Group<zarr.FetchStore>> {
+  ): Promise<zarr.Group<zarr.AsyncReadable>> {
     const storePath = this.normalizeStorePath(datasource.store);
-    if (!this.fetchStore || this.fetchStorePath !== storePath) {
+    if (!this.pendingStore || this.fetchStorePath !== storePath) {
       this.fetchStorePath = storePath;
-      this.fetchStore = zarr.root(
-        lru(new zarr.FetchStore(storePath, { useSuffixRequest: true }))
-      );
+      this.pendingStore = this.createNewStore(storePath)
+        .then((s) => zarr.root(s))
+        .catch((e) => {
+          // Clear the cache on failure so callers can retry.
+          if (this.fetchStorePath === storePath) {
+            this.pendingStore = null;
+          }
+          throw e;
+        });
     }
-    const root = this.fetchStore!;
+    // Capture locally so a concurrent path switch cannot swap the store under us.
+    const root = await this.pendingStore;
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
     const target = datasetPath ? root.resolve(datasetPath) : root;
     const dataset = await zarr.open(target, { kind: "group" });
     return dataset;
   }
 
-  public static async openZarrV3Metadata<Store extends zarr.Readable>(
-    store: Store
-  ): Promise<zarr.Group<Store>> {
-    const location = zarr.root(store);
-    const rootMetadata: TZarrV3RootMetadata = JSON.parse(
-      new TextDecoder().decode(
-        await store.get(location.resolve("zarr.json").path)
-      )
-    );
-
-    return new zarr.Group(store, location.path, {
-      /* eslint-disable camelcase */
-      zarr_format: 3,
-      node_type: "group",
-      attributes: { ...rootMetadata },
-      /* eslint-enable camelcase */
-    });
-  }
-
   private static async getVariable(
-    store: zarr.Group<zarr.FetchStore>,
+    store: zarr.Group<zarr.AsyncReadable>,
     variable: string
-  ): Promise<zarr.Array<zarr.DataType, zarr.FetchStore>> {
+  ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const fetchPromise = (async () => {
       return await zarr.open(store.resolve(variable), {
         kind: "array",
@@ -93,7 +90,7 @@ export class ZarrDataManager {
   static async getVariableInfo(
     datasource: TDatasetSource,
     variable: string
-  ): Promise<zarr.Array<zarr.DataType, zarr.FetchStore>> {
+  ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const group = await this.getDataset(datasource);
     const array = await this.getVariable(group, variable);
     return array;
@@ -102,7 +99,7 @@ export class ZarrDataManager {
   static async getVariableInfoByDatasetSources(
     datasource: TSources,
     variable: string
-  ): Promise<zarr.Array<zarr.DataType, zarr.FetchStore>> {
+  ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const array = await ZarrDataManager.getVariableInfo(
       ZarrDataManager.getDatasetSource(datasource!, variable),
       variable
@@ -123,7 +120,7 @@ export class ZarrDataManager {
   }
 
   static getVariableDataFromArray(
-    array: zarr.Array<zarr.DataType, zarr.FetchStore>,
+    array: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
     selection?: (number | null | zarr.Slice)[]
   ) {
     if (selection && selection.length > 0) {
@@ -135,7 +132,7 @@ export class ZarrDataManager {
   static async getCRSInfo(
     datasource: TSources,
     variable: string
-  ): Promise<zarr.Array<zarr.DataType, zarr.FetchStore>> {
+  ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const crsVar = await this.findCRSVar(datasource, variable);
     const variableSource = this.getDatasetSource(datasource, variable);
     return await this.getVariableInfo(variableSource, crsVar);
@@ -171,11 +168,11 @@ export class ZarrDataManager {
       ZarrDataManager.getDatasetSource(datasources, varname),
       varname
     );
-    return datavar.attrs._ARRAY_DIMENSIONS as string[];
+    return datavar.dimensionNames ?? [];
   }
 
   static invalidateCache() {
-    this.fetchStore = null;
+    this.pendingStore = null;
     this.fetchStorePath = null;
   }
 }

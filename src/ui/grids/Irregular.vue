@@ -17,6 +17,7 @@ import {
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
+  mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import {
   makeGpuProjectedPointMaterial,
@@ -121,6 +122,7 @@ watch(
     () => invertColormap.value,
     () => colormap.value,
     () => posterizeLevels.value,
+    () => store.hideLowerBound,
   ],
   () => {
     updateColormap(points);
@@ -378,8 +380,8 @@ function getGeographicDimensionIndices(
 ) {
   const geoDims: number[] = [];
   for (let i = 0; i < dimensions.length; i++) {
-    let latDims = latitudesAttrs._ARRAY_DIMENSIONS as string[];
-    let lonDims = longitudesAttrs._ARRAY_DIMENSIONS as string[];
+    let latDims = latitudesAttrs.dimensionNames as string[];
+    let lonDims = longitudesAttrs.dimensionNames as string[];
     if (latDims.includes(dimensions[i])) {
       geoDims.push(i);
     } else if (lonDims.includes(dimensions[i])) {
@@ -415,7 +417,7 @@ function updateHoverLookup(
 }
 
 async function buildDimensionConfig(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const { latitudes, longitudes, latitudesAttrs, longitudesAttrs } =
@@ -444,7 +446,7 @@ async function buildDimensionConfig(
 }
 
 async function fetchAndRenderData(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const { latitudes, longitudes, dimensionRanges, indices } =
@@ -455,16 +457,11 @@ async function fetchAndRenderData(
   );
 
   let { min, max, fillValue, missingValue } = getDataBounds(datavar, rawData);
+  rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
   getGrid(latitudes, longitudes!, rawData);
 
   // Update hover lookup
   updateHoverLookup(rawData, latitudes, longitudes!, fillValue, missingValue);
-
-  for (const p of points) {
-    const material = p.material as THREE.ShaderMaterial;
-    material.uniforms.fillValue.value = fillValue;
-    material.uniforms.missingValue.value = missingValue;
-  }
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
   updateHistogram(rawData, min, max, missingValue, fillValue);

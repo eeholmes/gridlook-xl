@@ -12,7 +12,11 @@ import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
-import { castDataVarToFloat32, getDataBounds } from "@/lib/data/zarrUtils.ts";
+import {
+  castDataVarToFloat32,
+  getDataBounds,
+  mapMissingAndFillToNaN,
+} from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
 import {
   makeGpuProjectedMeshMaterial,
@@ -113,6 +117,7 @@ watch(
     () => invertColormap.value,
     () => colormap.value,
     () => posterizeLevels.value,
+    () => store.hideLowerBound,
   ],
   () => {
     updateColormap(meshes);
@@ -341,7 +346,7 @@ function buildTriangleHoverIndex(
 
 function data2valueBuffer(
   data: zarr.Chunk<zarr.DataType>,
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
 ) {
   const awaitedData = data;
   const ncells = awaitedData.shape[0];
@@ -351,6 +356,7 @@ function data2valueBuffer(
     datavar,
     plotdata
   );
+  mapMissingAndFillToNaN(plotdata, missingValue, fillValue);
   const dataValues = new Float32Array(ncells * 3);
 
   for (let i = 0; i < ncells; i++) {
@@ -362,6 +368,7 @@ function data2valueBuffer(
   }
   return {
     dataValues: dataValues,
+    plotData: plotdata,
     dataMin: min,
     dataMax: max,
     missingValue,
@@ -384,6 +391,7 @@ async function getDimensionValues(
 
 function distributeDataToMeshes(dataBuffer: {
   dataValues: Float32Array;
+  plotData: Float32Array;
   dataMin: number;
   dataMax: number;
   missingValue: number;
@@ -398,15 +406,12 @@ function distributeDataToMeshes(dataBuffer: {
       "data_value",
       new THREE.BufferAttribute(meshData, 1)
     );
-    const material = mesh.material as THREE.ShaderMaterial;
-    material.uniforms.missingValue.value = dataBuffer.missingValue;
-    material.uniforms.fillValue.value = dataBuffer.fillValue;
     offset += nVerts;
   }
 }
 
 async function buildDimensionConfig(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const dimensionNames = await ZarrDataManager.getDimensionNames(
@@ -427,7 +432,7 @@ async function buildDimensionConfig(
 }
 
 async function fetchAndRenderData(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const { dimensionRanges, indices } = await buildDimensionConfig(
@@ -444,12 +449,11 @@ async function fetchAndRenderData(
   distributeDataToMeshes(dataBuffer);
 
   // Update hover lookup
-  const rawPlotData = castDataVarToFloat32(rawData.data);
   if (hoverTriangleVertices.value) {
     const hoverIndex = buildTriangleHoverIndex(
       hoverTriangleVertices.value,
       rawData.shape[0],
-      rawPlotData
+      dataBuffer.plotData
     );
     setHoverLookupFromIndex(
       hoverIndex,

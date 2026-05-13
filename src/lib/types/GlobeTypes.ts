@@ -1,7 +1,7 @@
 import type { Dayjs } from "dayjs";
 import * as zarr from "zarrita";
 
-import type { TColorMap } from "@/lib/shaders/colormapShaders";
+import type { TColorMap } from "@/lib/shaders/colormapShaders.ts";
 
 export const ZARR_FORMAT = {
   V2: 2,
@@ -28,8 +28,8 @@ export type TDimensionRange = {
 export type TDimInfo =
   | EmptyObj
   | {
-      current: Dayjs | number;
-      values: Int32Array;
+      current: Dayjs | number | bigint | string;
+      values: ArrayLike<number | bigint | string>;
       units?: string;
       attrs: zarr.Attributes;
       longName?: string;
@@ -79,25 +79,25 @@ export type TSources = {
   }[];
 };
 
-export type TSnapshotBackground = "black" | "white" | "transparent";
+export const SnapshotBackgrounds = {
+  BLACK: "black",
+  WHITE: "white",
+  TRANSPARENT: "transparent",
+} as const;
+export type TSnapshotBackground =
+  (typeof SnapshotBackgrounds)[keyof typeof SnapshotBackgrounds];
+export type TSnapshotResolutionScale = 1 | 2 | 4;
 
 export type TSnapshotOptions = {
   background: TSnapshotBackground;
+  resolutionScale: TSnapshotResolutionScale;
   showDatasetInfo: boolean;
   showColormap: boolean;
 };
 
 export const DEFAULT_SNAPSHOT_OPTIONS: TSnapshotOptions = {
-  background: "black",
+  background: SnapshotBackgrounds.BLACK,
+  resolutionScale: 1,
   showDatasetInfo: true,
   showColormap: true,
-};
-
-export type TZarrV3RootMetadata = {
-  zarr_format: 3;
-  node_type: "group";
-  attributes?: Record<string, unknown>;
-  consolidated_metadata: {
-    metadata: Record<string, zarr.ArrayMetadata | zarr.GroupMetadata>;
-  };
 };

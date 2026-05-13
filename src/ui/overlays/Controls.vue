@@ -17,15 +17,15 @@ import {
   clamp,
   PROJECTION_TYPES,
   type TProjectionType,
-} from "@/lib/projection/projectionUtils";
+} from "@/lib/projection/projectionUtils.ts";
 import type {
   TBounds,
   TModelInfo,
   TSnapshotOptions,
-} from "@/lib/types/GlobeTypes";
-import { useUrlParameterStore } from "@/store/paramStore";
-import { useGlobeControlStore } from "@/store/store";
-import { MOBILE_BREAKPOINT } from "@/ui/common/viewConstants";
+} from "@/lib/types/GlobeTypes.ts";
+import { useUrlParameterStore } from "@/store/paramStore.ts";
+import { useGlobeControlStore } from "@/store/store.ts";
+import { MOBILE_BREAKPOINT } from "@/ui/common/viewConstants.ts";
 
 const props = defineProps<{ modelInfo?: TModelInfo; currentSource: string }>();
 
@@ -65,18 +65,21 @@ const defaultBounds = ref<TBounds>({});
 const isInitialVarLoad = ref(true);
 
 // Colormap logic state
-const autoColormap = ref<boolean>(true);
+const userHasSelectedColormap = ref<boolean>(false);
 
 const urlParameterStore = useUrlParameterStore();
 const {
   paramColormap,
   paramInvertColormap,
   paramPosterizeLevels,
+  paramHideLowerBound,
   paramMaskMode,
   paramMaskingUseTexture,
   paramProjection,
   paramProjectionCenterLat,
   paramProjectionCenterLon,
+  paramBoundLow,
+  paramBoundHigh,
 } = storeToRefs(urlParameterStore);
 
 const menuCollapsed: Ref<boolean> = ref(false);
@@ -126,7 +129,7 @@ const setDefaultBounds = () => {
 const setDefaultColormap = () => {
   const defaultColormap =
     props.modelInfo?.vars[varnameSelector.value]?.default_colormap;
-  if (autoColormap.value && defaultColormap !== undefined) {
+  if (!userHasSelectedColormap.value && defaultColormap !== undefined) {
     invertColormap.value = defaultColormap.inverted || false;
     colormap.value = defaultColormap.name;
   }
@@ -174,13 +177,6 @@ watch(
     store.updateBounds(currentBounds.value as TBounds);
   },
   { deep: true }
-);
-
-watch(
-  () => autoColormap.value,
-  () => {
-    setDefaultColormap();
-  }
 );
 
 function onPickedBoundsModeChange(newMode: TBoundModes) {
@@ -248,6 +244,14 @@ if (paramProjectionCenterLat.value || paramProjectionCenterLon.value) {
   };
 }
 
+if (paramBoundHigh.value && paramBoundLow.value) {
+  const low = parseFloat(paramBoundLow.value);
+  const high = parseFloat(paramBoundHigh.value);
+  userBoundsLow.value = low;
+  userBoundsHigh.value = high;
+  pickedBoundsMode.value = BOUND_MODES.USER;
+}
+
 // Initialize bounds and colormap when component mounts
 onMounted(() => {
   setDefaultBounds();
@@ -255,6 +259,7 @@ onMounted(() => {
 
   if (paramColormap.value) {
     colormap.value = paramColormap.value;
+    userHasSelectedColormap.value = true;
   }
 
   if (paramInvertColormap.value) {
@@ -271,6 +276,10 @@ onMounted(() => {
     if (!isNaN(levels) && levels >= 0 && levels <= 32) {
       posterizeLevels.value = levels;
     }
+  }
+
+  if (paramHideLowerBound.value === "true") {
+    store.hideLowerBound = true;
   }
 
   // Initialize control panel visibility
@@ -340,9 +349,8 @@ onMounted(() => {
             />
             <ColormapControls
               :model-info="modelInfo"
-              :auto-colormap="autoColormap"
               :data-bounds="dataBounds"
-              @update:auto-colormap="autoColormap = $event"
+              @colormap-user-selected="userHasSelectedColormap = true"
               @force-user-bounds="pickedBoundsMode = BOUND_MODES.USER"
             />
             <div class="section-title mt-2">Projections</div>
@@ -474,6 +482,7 @@ onMounted(() => {
   min-width: 0;
   height: calc(100vh - 56px);
   overflow-y: auto;
+  overscroll-behavior-x: none;
   flex-shrink: 0;
   z-index: 10;
   background-color: #ddd;
@@ -496,6 +505,7 @@ onMounted(() => {
     position: fixed;
     height: 95%;
     border-radius: 0 !important;
+    padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
 
     &.mobile-visible {
       max-height: 100vh;

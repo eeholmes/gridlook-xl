@@ -1,7 +1,7 @@
 import { useEventListener } from "@vueuse/core";
 import * as d3 from "d3-geo";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
   onBeforeUnmount,
   onMounted,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/projection/projectionUtils.ts";
 import { useUrlParameterStore } from "@/store/paramStore.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
-import { isDisplayMode, isPresenterActive } from "@/store/usePresenterSync";
+import { isDisplayMode, isPresenterActive } from "@/store/usePresenterSync.ts";
 import {
   CONTROL_PANEL_WIDTH,
   MOBILE_BREAKPOINT,
@@ -78,6 +78,13 @@ export function useGridScene(options: UseGridSceneOptions) {
 
   let init = true;
   let currentOffset = 0;
+  // Counts consecutive frames where OrbitControls reported no camera change.
+  // The loop keeps running until this reaches IDLE_FRAMES_BEFORE_STOP so that
+  // the damping delta in OrbitControls is fully drained to zero before we
+  // stop calling update(). Without this, residual velocity would be applied
+  // the next time anything triggers a render (click, bounds change, etc.).
+  let idleFrameCount = 0;
+  const IDLE_FRAMES_BEFORE_STOP = 30; // ~500 ms at 60 fps – outlasts any realistic damping
   let targetOffset = 0;
   let isInitialLoad = true;
 
@@ -673,13 +680,27 @@ export function useGridScene(options: UseGridSceneOptions) {
       refreshHover();
     }
     const cam = getCamera();
-    if (!mouseDown && !store.isRotating && !controlsUpdated) {
-      if (cam) {
-        cameraState.debouncedEncodeCameraToURL(cam);
+    if (!mouseDown && !store.isRotating) {
+      if (controlsUpdated) {
+        // Controls are still moving (damping draining) – reset idle counter.
+        idleFrameCount = 0;
+      } else {
+        idleFrameCount++;
       }
-      return;
-    } else if (isPresenterActive.value) {
-      if (cam) {
+      if (cam && isPresenterActive.value && !store.isRotating) {
+        cameraState.encodeCameraToURL(cam);
+      }
+      if (idleFrameCount >= IDLE_FRAMES_BEFORE_STOP) {
+        // Damping is fully drained – safe to stop the loop.
+        idleFrameCount = 0;
+        if (cam) {
+          cameraState.debouncedEncodeCameraToURL(cam);
+        }
+        return;
+      }
+    } else {
+      idleFrameCount = 0;
+      if (isPresenterActive.value && cam && mouseDown) {
         cameraState.encodeCameraToURL(cam);
       }
     }
@@ -688,12 +709,13 @@ export function useGridScene(options: UseGridSceneOptions) {
 
   function onInteractionStart() {
     mouseDown = true;
+    idleFrameCount = 0;
     animationLoop();
   }
 
   function onInteractionEnd() {
     mouseDown = false;
-    redraw();
+    animationLoop();
   }
 
   function setupHoverListeners() {

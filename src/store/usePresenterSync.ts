@@ -8,9 +8,9 @@ import {
   type TPresenterMessage,
   type TPresenterRole,
   type TPresenterStatePayload,
-} from "@/lib/types/presenterSync";
-import { useUrlParameterStore } from "@/store/paramStore";
-import { useGlobeControlStore } from "@/store/store";
+} from "@/lib/types/presenterSync.ts";
+import { useUrlParameterStore } from "@/store/paramStore.ts";
+import { useGlobeControlStore } from "@/store/store.ts";
 
 const presenterRole: Ref<TPresenterRole | null> = ref(null);
 const presenterWindowOpen = ref(false);
@@ -219,9 +219,7 @@ export function usePresenterSync() {
   }
 
   function applyProjectionCenter(center: { lat: number; lon: number }) {
-    if (!store.isRotating) {
-      projectionCenter.value = center;
-    }
+    projectionCenter.value = center;
   }
 
   function applyDimSlidersValues(values: (number | null)[]) {
@@ -344,10 +342,7 @@ export function usePresenterSync() {
   watch(
     () => JSON.stringify(projectionCenter.value),
     () => {
-      if (
-        presenterRole.value === PresenterRole.CONTROLLER &&
-        !isRotating.value
-      ) {
+      if (presenterRole.value === PresenterRole.CONTROLLER) {
         broadcastProjectionCenter();
       }
     }

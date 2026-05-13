@@ -14,9 +14,10 @@ import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts"
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
   castDataVarToFloat32,
+  createMissingOrFillPredicate,
   getDataBounds,
   getLatLonData,
-  createMissingOrFillPredicate,
+  mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import {
   makeGpuProjectedMeshMaterial,
@@ -110,6 +111,7 @@ watch(
     () => invertColormap.value,
     () => colormap.value,
     () => posterizeLevels.value,
+    () => store.hideLowerBound,
   ],
   () => {
     updateColormap(meshes);
@@ -161,7 +163,7 @@ async function datasourceUpdate() {
 const BATCH_SIZE = 30;
 
 async function getGrid(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   data: Float32Array
 ) {
   const { latitudes, longitudes } = await getLatLonData(
@@ -640,16 +642,8 @@ function setHoverData(
   );
 }
 
-function applyMissingFillUniforms(fillValue: number, missingValue: number) {
-  for (let mesh of meshes) {
-    const material = mesh.material as THREE.ShaderMaterial;
-    material.uniforms.missingValue.value = missingValue;
-    material.uniforms.fillValue.value = fillValue;
-  }
-}
-
 async function renderGridAndHover(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   rawData: Float32Array,
   fillValue: number,
   missingValue: number
@@ -669,7 +663,7 @@ async function renderGridAndHover(
 }
 
 async function fetchAndRenderData(
-  datavar: zarr.Array<zarr.DataType, zarr.FetchStore>,
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
 ) {
   const dimensionNames = await ZarrDataManager.getDimensionNames(
@@ -688,13 +682,13 @@ async function fetchAndRenderData(
     false
   );
 
-  const rawData = castDataVarToFloat32(
+  let rawData = castDataVarToFloat32(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
   const { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
+  rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
 
   await renderGridAndHover(datavar, rawData, fillValue, missingValue);
-  applyMissingFillUniforms(fillValue, missingValue);
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
 

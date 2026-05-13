@@ -4,21 +4,20 @@ import Select from "primevue/select";
 import { ref, watch } from "vue";
 
 import ColorBar from "./ColorBar.vue";
-import { roundToDataPrecision } from "./colorbarUtils";
+import { roundToDataPrecision } from "./colorbarUtils.ts";
 
-import type { TColorMap } from "@/lib/shaders/colormapShaders";
-import type { TBounds, TModelInfo } from "@/lib/types/GlobeTypes.js";
-import { useGlobeControlStore } from "@/store/store";
+import type { TColorMap } from "@/lib/shaders/colormapShaders.ts";
+import type { TBounds, TModelInfo } from "@/lib/types/GlobeTypes.ts";
+import { useGlobeControlStore } from "@/store/store.ts";
 
 const props = defineProps<{
   modelInfo: TModelInfo;
-  autoColormap: boolean;
   dataBounds?: TBounds;
 }>();
 
 const emit = defineEmits<{
-  "update:autoColormap": [value: boolean];
   forceUserBounds: [];
+  colormapUserSelected: [];
 }>();
 
 const store = useGlobeControlStore();
@@ -26,6 +25,7 @@ const {
   colormap,
   invertColormap,
   posterizeLevels,
+  hideLowerBound,
   selection,
   histogram,
   fullHistogram,
@@ -103,6 +103,7 @@ function handleDropdownHide() {
 
 function handleDropdownChange() {
   selectionMade.value = true;
+  emit("colormapUserSelected");
 }
 
 function handleOptionHover(option: TColorMap) {
@@ -152,7 +153,7 @@ function handleOptionHover(option: TColorMap) {
 
     <!-- Row: Colormap selector + options -->
     <div class="columns is-mobile is-vcentered compact-row px-1">
-      <div class="column">
+      <div class="column colormap-column">
         <Select
           v-model="colormap"
           :options="modelInfo.colormaps"
@@ -197,19 +198,16 @@ function handleOptionHover(option: TColorMap) {
         </label>
       </div>
       <div class="column is-narrow">
-        <label class="checkbox">
+        <label
+          class="checkbox"
+          title="Hide values at or below the lower bound (useful with globe mask, e.g. for precipitation)"
+        >
           <input
-            id="auto_colormap"
-            :checked="autoColormap"
+            id="hide_lower_bound"
+            v-model="hideLowerBound"
             type="checkbox"
-            @change="
-              emit(
-                'update:autoColormap',
-                ($event.target as HTMLInputElement).checked
-              )
-            "
           />
-          auto
+          hide min
         </label>
       </div>
     </div>
@@ -227,6 +225,11 @@ function handleOptionHover(option: TColorMap) {
 .slider-column {
   display: flex;
   align-items: center;
+}
+
+.colormap-column {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .colormap-select {
