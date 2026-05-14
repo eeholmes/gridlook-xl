@@ -14,7 +14,7 @@
     },
     {
       "title": "MUR High-Res SST",
-      "url": "https://mur.s3.us-west-2.amazonaws.com/mur-sst/zarr-v1/",
+      "url": "https://mur-sst.s3.us-west-2.amazonaws.com/zarr-v1/",
       "tag": "regular"
     },
     {
