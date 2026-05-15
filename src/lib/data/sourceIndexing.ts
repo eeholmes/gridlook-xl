@@ -20,7 +20,8 @@ async function openDatasetGroup(
     const store = await zarr.withConsolidatedMetadata(baseStore, { format });
     return await zarr.open(store, { kind: "group" });
   } catch (consolidatedError) {
-    const store = zarr.root(baseStore);
+    const fallbackStore = await ZarrDataManager.createNewStore(storePath);
+    const store = zarr.root(fallbackStore);
     try {
       return await zarr.open(store, { kind: "group" });
     } catch (unconsolidatedError) {
