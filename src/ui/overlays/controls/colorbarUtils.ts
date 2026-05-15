@@ -1,3 +1,9 @@
+import {
+  DATA_TRANSFORMS,
+  invertDataTransform,
+  type TDataTransform,
+} from "@/lib/data/dataTransform.ts";
+
 // Shared formatting and tooltip utilities for ColorBar and DistributionPlot.
 
 /**
@@ -48,6 +54,13 @@ export function formatValue(value: number): string {
   return String(parseFloat(value.toPrecision(3)));
 }
 
+export function formatDisplayValue(
+  value: number,
+  transform: TDataTransform = DATA_TRANSFORMS.LINEAR
+): string {
+  return formatValue(invertDataTransform(value, transform));
+}
+
 export interface BinTooltip {
   range: string;
   frequency: string;
@@ -58,7 +71,8 @@ export function computeBinTooltip(
   binIndex: number,
   bins: number[],
   rangeLow: number,
-  rangeHigh: number
+  rangeHigh: number,
+  transform: TDataTransform = DATA_TRANSFORMS.LINEAR
 ): BinTooltip {
   const numBins = bins.length;
   const binSize = (rangeHigh - rangeLow) / numBins;
@@ -75,15 +89,15 @@ export function computeBinTooltip(
     beyond = "includes all values";
   } else if (binIndex === 0) {
     // First bin: includes all values below the lower range bound.
-    range = `x < ${formatValue(binHigh)}`;
-    beyond = `includes all values below ${formatValue(rangeLow)}`;
+    range = `x < ${formatDisplayValue(binHigh, transform)}`;
+    beyond = `includes all values below ${formatDisplayValue(rangeLow, transform)}`;
   } else if (binIndex === numBins - 1) {
     // Last bin: includes all values above the upper range bound.
-    range = `${formatValue(binLow)} ≤ x`;
-    beyond = `includes all values above ${formatValue(rangeHigh)}`;
+    range = `${formatDisplayValue(binLow, transform)} ≤ x`;
+    beyond = `includes all values above ${formatDisplayValue(rangeHigh, transform)}`;
   } else {
     // Interior bins: standard half-open interval.
-    range = `${formatValue(binLow)} ≤ x < ${formatValue(binHigh)}`;
+    range = `${formatDisplayValue(binLow, transform)} ≤ x < ${formatDisplayValue(binHigh, transform)}`;
   }
 
   return {

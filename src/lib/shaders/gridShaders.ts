@@ -24,6 +24,11 @@ bool is_nan(float val) {
     // exponent all 1s AND zero mantissa = Infinity (not NaN)
     return (bits & 0x7F800000u) == 0x7F800000u && (bits & 0x007FFFFFu) != 0u;
 }
+
+bool is_finite(float val) {
+    uint bits = floatBitsToUint(val);
+    return (bits & 0x7F800000u) != 0x7F800000u;
+}
 `;
 
 const posterizeGLSL = `
@@ -37,6 +42,15 @@ float posterize(float value, float levels) {
 }
 `;
 
+const dataTransformGLSL = `
+float transform_value(float value, int transformMode) {
+    if (transformMode == 1) {
+        return (is_finite(value) && value > 0.0) ? log(value) / log(10.0) : nan("");
+    }
+    return value;
+}
+`;
+
 const textureColormapFragmentShader = `
 ${colormapShaders}
 
@@ -44,18 +58,21 @@ ${isNaNGLSL}
 
 ${posterizeGLSL}
 
+${dataTransformGLSL}
+
 uniform float addOffset;
 uniform float scaleFactor;
 uniform int colormap;
 uniform float posterizeLevels;
 uniform float hideBelowValue;
+uniform int dataTransformMode;
 uniform sampler2D data;
 
 varying vec2 vUv;
 
 void main() {
     gl_FragColor.a = 1.0;
-    float v_value = texture(data, vUv).r;
+    float v_value = transform_value(texture(data, vUv).r, dataTransformMode);
     if (is_nan(v_value) || v_value <= hideBelowValue) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
@@ -75,19 +92,23 @@ ${isNaNGLSL}
 
 ${posterizeGLSL}
 
+${dataTransformGLSL}
+
 varying float v_value;
 uniform float addOffset;
 uniform float scaleFactor;
 uniform int colormap;
 uniform float posterizeLevels;
 uniform float hideBelowValue;
+uniform int dataTransformMode;
 
 void main() {
-    if (is_nan(v_value) || v_value <= hideBelowValue) {
+    float transformedValue = transform_value(v_value, dataTransformMode);
+    if (is_nan(transformedValue) || transformedValue <= hideBelowValue) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
-    float normalized_value = clamp(addOffset + scaleFactor * v_value, 0.0, 1.0);
+    float normalized_value = clamp(addOffset + scaleFactor * transformedValue, 0.0, 1.0);
     normalized_value = posterize(normalized_value, posterizeLevels);
     ${applyColormapShaders}
     gl_FragColor.a = 1.0;
@@ -111,18 +132,22 @@ ${isNaNGLSL}
 
 ${posterizeGLSL}
 
+${dataTransformGLSL}
+
 varying float v_value;
 uniform float addOffset;
 uniform float scaleFactor;
 uniform int colormap;
 uniform float posterizeLevels;
 uniform float hideBelowValue;
+uniform int dataTransformMode;
 
 void main() {
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
 
     // Normalize scalar value for color mapping
-    float normalized_value = clamp(addOffset + scaleFactor * v_value, 0.0, 1.0);
+    float transformedValue = transform_value(v_value, dataTransformMode);
+    float normalized_value = clamp(addOffset + scaleFactor * transformedValue, 0.0, 1.0);
     normalized_value = posterize(normalized_value, posterizeLevels);
     float r2 = dot(uv, uv);
     // Soft circular splat using Gaussian falloff
@@ -130,7 +155,7 @@ void main() {
     if (falloff < 0.01) discard; // Optional: discard transparent fragments
 
 
-    if (is_nan(v_value) || v_value <= hideBelowValue) {
+    if (is_nan(transformedValue) || transformedValue <= hideBelowValue) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
@@ -342,6 +367,7 @@ export function makeGpuProjectedTextureMaterial(
       colormap: { value: availableColormaps[colormap] },
       posterizeLevels: { value: 0.0 },
       hideBelowValue: { value: -1e38 },
+      dataTransformMode: { value: 0 },
       data: { value: texture },
       // Projection uniforms
       projectionType: {
@@ -375,6 +401,7 @@ export function makeGpuProjectedMeshMaterial(
       colormap: { value: availableColormaps[colormap] },
       posterizeLevels: { value: 0.0 },
       hideBelowValue: { value: -1e38 },
+      dataTransformMode: { value: 0 },
       // Projection uniforms
       projectionType: {
         value: PROJECTION_TYPE_BY_MODE[PROJECTION_TYPES.NEARSIDE_PERSPECTIVE],
@@ -408,6 +435,7 @@ export function makeGpuProjectedPointMaterial(
       maxPointSize: { value: 10.0 },
       posterizeLevels: { value: 0.0 },
       hideBelowValue: { value: -1e38 },
+      dataTransformMode: { value: 0 },
       colormap: { value: availableColormaps[colormap] },
       // Projection uniforms
       projectionType: {

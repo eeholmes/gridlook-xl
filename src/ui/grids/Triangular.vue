@@ -10,6 +10,7 @@ import {
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
+import { getTransformedDataBounds } from "@/lib/data/dataTransform.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
@@ -44,6 +45,7 @@ const {
   invertColormap,
   posterizeLevels,
   selection,
+  dataTransform,
   isInitializingVariable,
   varinfo,
   projectionMode,
@@ -120,6 +122,14 @@ watch(
     () => store.hideLowerBound,
   ],
   () => {
+    updateColormap(meshes);
+  }
+);
+
+watch(
+  () => dataTransform.value,
+  async () => {
+    await getData(UPDATE_MODE.SLIDER_TOGGLE);
     updateColormap(meshes);
   }
 );
@@ -445,6 +455,10 @@ async function fetchAndRenderData(
     indices
   );
   const dataBuffer = data2valueBuffer(rawData, datavar);
+  const transformedBounds = getTransformedDataBounds(
+    dataBuffer.plotData,
+    dataTransform.value
+  );
   // Distribute data values to each mesh
   distributeDataToMeshes(dataBuffer);
 
@@ -465,8 +479,8 @@ async function fetchAndRenderData(
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
   updateHistogram(
     dataBuffer.dataValues,
-    dataBuffer.dataMin,
-    dataBuffer.dataMax,
+    transformedBounds.low,
+    transformedBounds.high,
     dataBuffer.missingValue,
     dataBuffer.fillValue
   );
@@ -475,7 +489,7 @@ async function fetchAndRenderData(
     {
       attrs: datavar.attrs,
       dimInfo,
-      bounds: { low: dataBuffer.dataMin, high: dataBuffer.dataMax },
+      bounds: transformedBounds,
       dimRanges: dimensionRanges,
     },
     indices as number[],

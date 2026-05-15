@@ -10,6 +10,7 @@ import {
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
+import { getTransformedDataBounds } from "@/lib/data/dataTransform.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
@@ -46,6 +47,7 @@ const {
   invertColormap,
   posterizeLevels,
   selection,
+  dataTransform,
   isInitializingVariable,
   varinfo,
   projectionMode,
@@ -114,6 +116,14 @@ watch(
     () => store.hideLowerBound,
   ],
   () => {
+    updateColormap(meshes);
+  }
+);
+
+watch(
+  () => dataTransform.value,
+  async () => {
+    await getData(UPDATE_MODE.SLIDER_TOGGLE);
     updateColormap(meshes);
   }
 );
@@ -454,8 +464,12 @@ async function fetchAndRenderData(
   const latitudesData = latitudes.data as Float64Array;
   const longitudesData = longitudes!.data as Float64Array;
 
-  let { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
+  let { missingValue, fillValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
+  const transformedBounds = getTransformedDataBounds(
+    rawData,
+    dataTransform.value
+  );
 
   buildGaussianReducedGeometry(latitudesData, longitudesData, rawData);
 
@@ -470,13 +484,19 @@ async function fetchAndRenderData(
   updateMeshProjectionUniforms();
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
-  updateHistogram(rawData, min, max, missingValue, fillValue);
+  updateHistogram(
+    rawData,
+    transformedBounds.low,
+    transformedBounds.high,
+    missingValue,
+    fillValue
+  );
 
   store.updateVarInfo(
     {
       attrs: datavar.attrs,
       dimInfo,
-      bounds: { low: min, high: max },
+      bounds: transformedBounds,
       dimRanges: dimensionRanges,
     },
     indices as number[],

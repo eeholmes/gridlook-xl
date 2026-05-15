@@ -10,6 +10,7 @@ import {
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
+import { getTransformedDataBounds } from "@/lib/data/dataTransform.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { reconcileCoordinates } from "@/lib/data/irregularGridHelpers.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
@@ -45,6 +46,7 @@ const {
   invertColormap,
   posterizeLevels,
   selection,
+  dataTransform,
   isInitializingVariable,
   varinfo,
   projectionMode,
@@ -125,6 +127,14 @@ watch(
     () => store.hideLowerBound,
   ],
   () => {
+    updateColormap(points);
+  }
+);
+
+watch(
+  () => dataTransform.value,
+  async () => {
+    await getData(UPDATE_MODE.SLIDER_TOGGLE);
     updateColormap(points);
   }
 );
@@ -456,21 +466,31 @@ async function fetchAndRenderData(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
 
-  let { min, max, fillValue, missingValue } = getDataBounds(datavar, rawData);
+  let { fillValue, missingValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
+  const transformedBounds = getTransformedDataBounds(
+    rawData,
+    dataTransform.value
+  );
   getGrid(latitudes, longitudes!, rawData);
 
   // Update hover lookup
   updateHoverLookup(rawData, latitudes, longitudes!, fillValue, missingValue);
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
-  updateHistogram(rawData, min, max, missingValue, fillValue);
+  updateHistogram(
+    rawData,
+    transformedBounds.low,
+    transformedBounds.high,
+    missingValue,
+    fillValue
+  );
 
   store.updateVarInfo(
     {
       attrs: datavar.attrs,
       dimInfo,
-      bounds: { low: min, high: max },
+      bounds: transformedBounds,
       dimRanges: dimensionRanges,
     },
     indices as number[],

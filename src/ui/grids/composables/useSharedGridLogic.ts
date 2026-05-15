@@ -8,6 +8,10 @@ import { useGridDataAccess } from "./useGridDataAccess.ts";
 import { useGridOverlays } from "./useGridOverlays.ts";
 import { useGridScene } from "./useGridScene.ts";
 
+import {
+  DATA_TRANSFORMS,
+  applyDataTransform,
+} from "@/lib/data/dataTransform.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
 import { availableColormaps } from "@/lib/shaders/colormapShaders.ts";
 import { getColormapScaleOffset } from "@/lib/shaders/gridShaders.ts";
@@ -36,6 +40,7 @@ export function useSharedGridLogic() {
     landSeaMaskUseTexture,
     selection,
     colormap,
+    dataTransform,
     invertColormap,
     posterizeLevels,
     hideLowerBound,
@@ -171,6 +176,10 @@ export function useSharedGridLogic() {
       material.uniforms.colormap.value = availableColormaps[colormap.value];
       material.uniforms.addOffset.value = addOffset;
       material.uniforms.scaleFactor.value = scaleFactor;
+      if (material.uniforms.dataTransformMode) {
+        material.uniforms.dataTransformMode.value =
+          dataTransform.value === DATA_TRANSFORMS.LOG10 ? 1 : 0;
+      }
       if (material.uniforms.posterizeLevels) {
         material.uniforms.posterizeLevels.value = posterizeLevels.value;
       }
@@ -307,8 +316,12 @@ export function useSharedGridLogic() {
         HISTOGRAM_SUMMARY_BINS
       );
     } else {
-      summary = buildHistogramSummary(
+      const transformedData = Float32Array.from(
         data as ArrayLike<number>,
+        (v) => applyDataTransform(v, dataTransform.value)
+      );
+      summary = buildHistogramSummary(
+        transformedData,
         min,
         max,
         HISTOGRAM_SUMMARY_BINS,

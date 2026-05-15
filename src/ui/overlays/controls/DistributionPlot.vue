@@ -19,9 +19,14 @@ import {
 
 import {
   computeBinTooltip,
-  formatValue,
+  formatDisplayValue,
   type BinTooltip,
 } from "./colorbarUtils.ts";
+
+import {
+  DATA_TRANSFORMS,
+  type TDataTransform,
+} from "@/lib/data/dataTransform.ts";
 
 // ---------------------------------------------------------------------------
 // Props & emits
@@ -34,6 +39,7 @@ const props = defineProps<{
   boundsLow?: number;
   boundsHigh?: number;
   isPannable?: boolean;
+  dataTransform?: TDataTransform;
 }>();
 
 const emit = defineEmits<{
@@ -380,7 +386,8 @@ function onHover(event: MouseEvent) {
     binIndex,
     props.fullHistogram,
     props.dataBoundsLow,
-    props.dataBoundsHigh
+    props.dataBoundsHigh,
+    props.dataTransform ?? DATA_TRANSFORMS.LINEAR
   );
 }
 
@@ -505,7 +512,12 @@ onBeforeUnmount(() => {
         :key="i"
         class="tick-label"
         :style="{ left: tickFraction(tick) * 100 + '%' }"
-        >{{ formatValue(tick) }}</span
+        >{{
+          formatDisplayValue(
+            tick,
+            props.dataTransform ?? DATA_TRANSFORMS.LINEAR
+          )
+        }}</span
       >
     </div>
 

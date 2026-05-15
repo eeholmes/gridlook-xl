@@ -6,6 +6,10 @@ import { ref, watch } from "vue";
 import ColorBar from "./ColorBar.vue";
 import { roundToDataPrecision } from "./colorbarUtils.ts";
 
+import {
+  DATA_TRANSFORMS,
+  type TDataTransform,
+} from "@/lib/data/dataTransform.ts";
 import type { TColorMap } from "@/lib/shaders/colormapShaders.ts";
 import type { TBounds, TModelInfo } from "@/lib/types/GlobeTypes.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
@@ -23,6 +27,7 @@ const emit = defineEmits<{
 const store = useGlobeControlStore();
 const {
   colormap,
+  dataTransform,
   invertColormap,
   posterizeLevels,
   hideLowerBound,
@@ -30,6 +35,11 @@ const {
   histogram,
   fullHistogram,
 } = storeToRefs(store);
+
+const transformOptions: { label: string; value: TDataTransform }[] = [
+  { label: "Linear", value: DATA_TRANSFORMS.LINEAR },
+  { label: "Log10", value: DATA_TRANSFORMS.LOG10 },
+];
 
 const previousValue = ref(posterizeLevels.value);
 
@@ -123,6 +133,7 @@ function handleOptionHover(option: TColorMap) {
       :data-bounds-high="props.dataBounds?.high"
       :full-histogram="fullHistogram"
       :histogram="histogram"
+      :data-transform="dataTransform"
       @update:bounds-low="handleBoundsLowUpdate"
       @update:bounds-high="handleBoundsHighUpdate"
     />
@@ -209,6 +220,30 @@ function handleOptionHover(option: TColorMap) {
           />
           hide min
         </label>
+      </div>
+    </div>
+    <div class="columns is-mobile is-vcentered compact-row px-1 mt-2">
+      <div class="column is-narrow">
+        <label class="label is-small mb-0">Transform</label>
+      </div>
+      <div class="column">
+        <div class="field is-grouped is-grouped-multiline">
+          <div
+            v-for="option in transformOptions"
+            :key="option.value"
+            class="control"
+          >
+            <label class="radio">
+              <input
+                v-model="dataTransform"
+                type="radio"
+                name="data_transform"
+                :value="option.value"
+              />
+              {{ option.label }}
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   </div>

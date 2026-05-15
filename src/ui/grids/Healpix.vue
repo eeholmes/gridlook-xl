@@ -11,6 +11,7 @@ import {
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
+import { getTransformedDataBounds } from "@/lib/data/dataTransform.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
@@ -54,6 +55,7 @@ const {
   invertColormap,
   posterizeLevels,
   selection,
+  dataTransform,
   dimSlidersValues,
   isInitializingVariable,
   varinfo,
@@ -140,6 +142,14 @@ watch(
     () => store.hideLowerBound,
   ],
   () => {
+    updateColormap(mainMeshes);
+  }
+);
+
+watch(
+  () => dataTransform.value,
+  async () => {
+    await getData(UPDATE_MODE.SLIDER_TOGGLE);
     updateColormap(mainMeshes);
   }
 );
@@ -672,6 +682,18 @@ async function processHealpixChunks(
   return { dataMin, dataMax, histogramSummaries };
 }
 
+function setHoverCellIndices(cellCoord: number[] | undefined) {
+  if (!cellCoord) {
+    hoverCellIndexMap.value = null;
+    return;
+  }
+  const cellIndexMap = new Map<number, number>();
+  for (let index = 0; index < cellCoord.length; index++) {
+    cellIndexMap.set(cellCoord[index], index);
+  }
+  hoverCellIndexMap.value = cellIndexMap;
+}
+
 function healpixHoverLookup(
   lat: number,
   lon: number
@@ -737,24 +759,21 @@ async function fetchAndRenderData(
     fillValue = HEALPIX_UNSEEN;
   }
   mapMissingAndFillToNaN(hoverData.value, missingValue, fillValue);
-  if (cellCoord) {
-    const cellIndexMap = new Map<number, number>();
-    for (let index = 0; index < cellCoord.length; index++) {
-      cellIndexMap.set(cellCoord[index], index);
-    }
-    hoverCellIndexMap.value = cellIndexMap;
-  } else {
-    hoverCellIndexMap.value = null;
-  }
+  setHoverCellIndices(cellCoord);
   setHoverLookup(healpixHoverLookup);
-  const { dataMin, dataMax, histogramSummaries } = await processHealpixChunks(
-    datavar,
-    cellCoord,
-    nside,
-    indices
-  );
+  await processHealpixChunks(datavar, cellCoord, nside, indices);
 
-  updateHistogram(histogramSummaries, dataMin, dataMax);
+  const transformedBounds = getTransformedDataBounds(
+    hoverData.value,
+    dataTransform.value
+  );
+  updateHistogram(
+    hoverData.value,
+    transformedBounds.low,
+    transformedBounds.high,
+    missingValue,
+    fillValue
+  );
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
 
@@ -762,7 +781,7 @@ async function fetchAndRenderData(
     {
       attrs: datavar.attrs,
       dimInfo,
-      bounds: { low: dataMin, high: dataMax },
+      bounds: transformedBounds,
       dimRanges: dimensionRanges,
     },
     indices as number[],

@@ -13,6 +13,7 @@ import ProjectionControls from "./controls/ProjectionControls.vue";
 import VariableSelector from "./controls/VariableSelector.vue";
 
 // Import control components
+import { applyDataTransform } from "@/lib/data/dataTransform.ts";
 import {
   clamp,
   PROJECTION_TYPES,
@@ -55,6 +56,7 @@ const {
   userBoundsLow,
   userBoundsHigh,
   projectionCenter,
+  dataTransform,
 } = storeToRefs(store);
 
 // Bounds logic state
@@ -120,8 +122,19 @@ const currentBounds = computed(() => {
 const setDefaultBounds = () => {
   const defaultConfig = props.modelInfo?.vars[varnameSelector.value];
   if (defaultConfig?.default_range) {
-    userBoundsLow.value = defaultConfig.default_range.low;
-    userBoundsHigh.value = defaultConfig.default_range.high;
+    const transformedLow = applyDataTransform(
+      defaultConfig.default_range.low,
+      dataTransform.value
+    );
+    const transformedHigh = applyDataTransform(
+      defaultConfig.default_range.high,
+      dataTransform.value
+    );
+    if (!Number.isFinite(transformedLow) || !Number.isFinite(transformedHigh)) {
+      return;
+    }
+    userBoundsLow.value = transformedLow;
+    userBoundsHigh.value = transformedHigh;
     return;
   }
 };
@@ -177,6 +190,14 @@ watch(
     store.updateBounds(currentBounds.value as TBounds);
   },
   { deep: true }
+);
+
+watch(
+  () => dataTransform.value,
+  () => {
+    store.resetUserBounds();
+    pickedBoundsMode.value = BOUND_MODES.DATA;
+  }
 );
 
 function onPickedBoundsModeChange(newMode: TBoundModes) {

@@ -1,6 +1,10 @@
 import { defineStore } from "pinia";
 
 import {
+  DATA_TRANSFORMS,
+  type TDataTransform,
+} from "@/lib/data/dataTransform.ts";
+import {
   LAND_SEA_MASK_MODES,
   type TLandSeaMaskMode,
 } from "@/lib/layers/landSeaMask.ts";
@@ -54,6 +58,7 @@ export const useGlobeControlStore = defineStore("globeControl", {
       histogram: undefined as number[] | undefined, // selection-range histogram bins
       fullHistogram: undefined as number[] | undefined, // fixed histogram over full data range
       colormap: "turbo" as TColorMap,
+      dataTransform: DATA_TRANSFORMS.LINEAR as TDataTransform,
       invertColormap: true,
       posterizeLevels: 0 as number,
       hideLowerBound: false,

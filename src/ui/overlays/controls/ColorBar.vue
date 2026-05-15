@@ -11,11 +11,16 @@ import {
 } from "vue";
 
 import {
-  formatValue,
+  formatDisplayValue,
   computeBinTooltip,
   type BinTooltip,
 } from "./colorbarUtils.ts";
 
+import {
+  DATA_TRANSFORMS,
+  applyDataTransform,
+  type TDataTransform,
+} from "@/lib/data/dataTransform.ts";
 import {
   availableColormaps,
   type TColorMap,
@@ -36,6 +41,7 @@ const props = withDefaults(
     dataBoundsHigh?: number;
     fullHistogram?: number[];
     histogram?: number[];
+    dataTransform?: TDataTransform;
   }>(),
   {
     colormap: "turbo",
@@ -47,6 +53,7 @@ const props = withDefaults(
     dataBoundsHigh: undefined,
     fullHistogram: undefined,
     histogram: undefined,
+    dataTransform: DATA_TRANSFORMS.LINEAR,
   }
 );
 
@@ -137,11 +144,15 @@ const LABEL_HALF_WIDTH_PX = 45;
 // ---------------------------------------------------------------------------
 
 const lowLabel = computed(() =>
-  props.boundsLow !== undefined ? formatValue(props.boundsLow) : ""
+  props.boundsLow !== undefined
+    ? formatDisplayValue(props.boundsLow, props.dataTransform)
+    : ""
 );
 
 const highLabel = computed(() =>
-  props.boundsHigh !== undefined ? formatValue(props.boundsHigh) : ""
+  props.boundsHigh !== undefined
+    ? formatDisplayValue(props.boundsHigh, props.dataTransform)
+    : ""
 );
 
 const midLabelsArray = computed(() => {
@@ -200,7 +211,10 @@ const midLabelsArray = computed(() => {
     ) {
       continue;
     }
-    labels.push({ text: formatValue(value), fraction: dataFrac });
+    labels.push({
+      text: formatDisplayValue(value, props.dataTransform),
+      fraction: dataFrac,
+    });
   }
   return labels;
 });
@@ -233,10 +247,12 @@ const tooltipStyle = computed(() => ({
 }));
 
 const hoveredValueFraction = computed(() => {
-  const value = hoveredGridPoint.value?.value;
+  const transformedValue = applyDataTransform(
+    hoveredGridPoint.value?.value ?? Number.NaN,
+    props.dataTransform
+  );
   if (
-    value === null ||
-    value === undefined ||
+    !Number.isFinite(transformedValue) ||
     props.dataBoundsLow === undefined ||
     props.dataBoundsHigh === undefined ||
     dataRange.value <= 0
@@ -245,7 +261,7 @@ const hoveredValueFraction = computed(() => {
   }
   return Math.max(
     0,
-    Math.min(1, (value - props.dataBoundsLow) / dataRange.value)
+    Math.min(1, (transformedValue - props.dataBoundsLow) / dataRange.value)
   );
 });
 
@@ -593,7 +609,8 @@ function onSelHistHover(event: MouseEvent) {
     binIndex,
     props.histogram,
     props.boundsLow,
-    props.boundsHigh
+    props.boundsHigh,
+    props.dataTransform
   );
 }
 
@@ -671,6 +688,7 @@ onBeforeUnmount(() => {
       :bounds-low="props.boundsLow"
       :bounds-high="props.boundsHigh"
       :is-pannable="isPannable"
+      :data-transform="props.dataTransform"
       @pan-start="onDistributionPanStart"
       @handle-drag-start="onDistributionHandleDragStart"
       @pointer-move="(e) => sliderRef?.onMove(e)"

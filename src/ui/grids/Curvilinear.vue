@@ -10,6 +10,7 @@ import {
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
+import { getTransformedDataBounds } from "@/lib/data/dataTransform.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
@@ -46,6 +47,7 @@ const {
   invertColormap,
   posterizeLevels,
   selection,
+  dataTransform,
   isInitializingVariable,
   varinfo,
   projectionMode,
@@ -119,6 +121,14 @@ watch(
 );
 
 // GPU projection: update shader uniforms instead of rebuilding geometry
+watch(
+  () => dataTransform.value,
+  async () => {
+    await getData(UPDATE_MODE.SLIDER_TOGGLE);
+    updateColormap(meshes);
+  }
+);
+
 watch(
   [() => projectionMode.value, () => projectionCenter.value],
   () => {
@@ -685,20 +695,30 @@ async function fetchAndRenderData(
   let rawData = castDataVarToFloat32(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
-  const { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
+  const { missingValue, fillValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
+  const transformedBounds = getTransformedDataBounds(
+    rawData,
+    dataTransform.value
+  );
 
   await renderGridAndHover(datavar, rawData, fillValue, missingValue);
 
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
 
-  updateHistogram(rawData, min, max, missingValue, fillValue);
+  updateHistogram(
+    rawData,
+    transformedBounds.low,
+    transformedBounds.high,
+    missingValue,
+    fillValue
+  );
 
   store.updateVarInfo(
     {
       attrs: datavar.attrs,
       dimInfo,
-      bounds: { low: min, high: max },
+      bounds: transformedBounds,
       dimRanges: dimensionRanges,
     },
     indices as number[],
