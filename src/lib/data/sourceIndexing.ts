@@ -19,15 +19,13 @@ async function openDatasetGroup(
   try {
     const store = await zarr.withConsolidatedMetadata(baseStore, { format });
     return await zarr.open(store, { kind: "group" });
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      !error.message.includes("consolidated metadata")
-    ) {
-      throw error;
-    }
+  } catch (consolidatedError) {
     const store = zarr.root(baseStore);
-    return await zarr.open(store, { kind: "group" });
+    try {
+      return await zarr.open(store, { kind: "group" });
+    } catch {
+      throw consolidatedError;
+    }
   }
 }
 
