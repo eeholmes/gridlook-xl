@@ -14,7 +14,7 @@
             "datasources": {
                 "CHLA": {
                     "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/",
-                    "dataset": "zarr/CHLA",
+                    "dataset": "zarr",
                     "default_range": {
                         "low": 0,
                         "high": 30
