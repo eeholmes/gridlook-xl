@@ -11,6 +11,28 @@ import { ZarrDataManager } from "./ZarrDataManager.ts";
 
 import trim from "@/utils/trim.ts";
 
+async function openDatasetGroup(
+  storePath: string,
+  format: "v2" | "v3"
+): Promise<zarr.Group<zarr.AsyncReadable>> {
+  const baseStore = await ZarrDataManager.createNewStore(storePath);
+  try {
+    const store = await zarr.withConsolidatedMetadata(baseStore, { format });
+    return await zarr.open(store, { kind: "group" });
+  } catch (consolidatedError) {
+    const fallbackStore = await ZarrDataManager.createNewStore(storePath);
+    const store = zarr.root(fallbackStore);
+    try {
+      return await zarr.open(store, { kind: "group" });
+    } catch (unconsolidatedError) {
+      throw new AggregateError(
+        [consolidatedError, unconsolidatedError],
+        `Failed to open ${format} Zarr group at ${storePath}`
+      );
+    }
+  }
+}
+
 function isValidVariable(
   varname: string,
   shape: number[],
@@ -210,8 +232,7 @@ function collectStores(
 }
 
 /**
- * Enrich the index with dimension names and attributes from Zarr V2
- * consolidated metadata.
+ * Enrich the index with dimension names and attributes from Zarr metadata.
  */
 async function enrichMetadata(
   stores: Record<string, Set<string>>,
@@ -219,11 +240,7 @@ async function enrichMetadata(
   format: "v2" | "v3"
 ) {
   for (const [store, vars] of Object.entries(stores)) {
-    const zarrStore = await zarr.withConsolidatedMetadata(
-      await ZarrDataManager.createNewStore(store),
-      { format: format }
-    );
-    const root = await zarr.open(zarrStore, { kind: "group" });
+    const root = await openDatasetGroup(store, format);
 
     for (const varname of vars) {
       try {
