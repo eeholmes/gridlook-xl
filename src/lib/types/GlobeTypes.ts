@@ -65,6 +65,7 @@ export type TSources = {
   name?: string;
   zarr_format: TZarrFormat;
   default_var?: string;
+  default_time?: number;
   levels: {
     name?: string;
     grid: {

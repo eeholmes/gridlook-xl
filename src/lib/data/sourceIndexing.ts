@@ -251,6 +251,27 @@ export async function indexFromIndex(src: string): Promise<TSources> {
     throw new Error(`Index not found at ${src}`);
   }
   const sources = (await res.json()) as TSources;
+
+  // If datasources is missing or empty, auto-discover variables from the zarr store.
+  // This allows index JSON files to only specify metadata (default_var, default_time, etc.)
+  // without having to enumerate every variable in the dataset.
+  type TRawLevel = Omit<(typeof sources.levels)[0], "datasources"> & {
+    datasources?: Record<string, TDataSource>;
+  };
+  const rawLevel = sources.levels[0] as TRawLevel;
+  if (
+    !rawLevel?.datasources ||
+    Object.keys(rawLevel.datasources).length === 0
+  ) {
+    const level = sources.levels[0];
+    const zarrSrc =
+      trim(level.grid.store, "/") + "/" + trim(level.grid.dataset, "/");
+    const zarrSources = await indexFromZarr(zarrSrc);
+    sources.levels[0].datasources = zarrSources.levels[0].datasources;
+    sources.zarr_format = zarrSources.zarr_format; // eslint-disable-line camelcase
+    return sources;
+  }
+
   const datasources = sources.levels[0].datasources;
   const stores = collectStores(datasources);
   try {

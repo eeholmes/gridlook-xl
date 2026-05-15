@@ -90,7 +90,7 @@ if (urlParams.get("mode") === PresenterRole.DISPLAY) {
 const { varnameSelector, loading, colormap, invertColormap } =
   storeToRefs(store);
 
-const { paramVarname, paramGridType, paramDistractionFree } =
+const { paramVarname, paramGridType, paramDistractionFree, paramDimIndices } =
   storeToRefs(urlParameterStore);
 
 type TGlobeHandle = {
@@ -224,6 +224,15 @@ function prepareDefaults(src: string, index: TSources) {
     const varinfo = modelInfo.value!.vars[varname];
     return !varinfo.hidden;
   });
+  // Apply default_time from the index before setting the variable so that the
+  // first data load uses the correct time index. Only applied when no URL
+  // parameter has already set the time dimension index.
+  if (index.default_time !== undefined && !("time" in paramDimIndices.value)) {
+    paramDimIndices.value = {
+      ...paramDimIndices.value,
+      time: String(index.default_time),
+    };
+  }
   varnameSelector.value =
     paramVarname.value ?? modelInfo.value!.defaultVar ?? validVars[0];
 
