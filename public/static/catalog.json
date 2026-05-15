@@ -21,6 +21,11 @@
       "title": "dpp0066 - 2d_ml @ R02B06",
       "url": "https://gridlook.pages.dev/static/index_mr_dpp0066.json",
       "tag": "triangular"
+    },
+    {
+      "title": "Indian Ocean Zarr",
+      "url": "https://gridlook.pages.dev/static/index_io.json",
+      "tag": "regular"
     }
   ]
 }
