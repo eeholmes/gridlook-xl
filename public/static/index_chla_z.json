@@ -17,7 +17,7 @@
           "dataset": "zarr",
           "default_range": {
             "low": 0,
-            "high": 30
+            "high": 10
           },
           "default_colormap": {
             "name": "turbo",
