@@ -10,7 +10,10 @@ import {
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
-import { getTransformedDataBounds } from "@/lib/data/dataTransform.ts";
+import {
+  DATA_TRANSFORMS,
+  getTransformedDataBounds,
+} from "@/lib/data/dataTransform.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
@@ -636,6 +639,19 @@ async function buildDimensionConfig(
   );
 }
 
+function getTransformedBoundsForDisplay(
+  min: number,
+  max: number,
+  data: ArrayLike<number>
+) {
+  if (dataTransform.value === DATA_TRANSFORMS.LINEAR) {
+    return Number.isFinite(min) && Number.isFinite(max)
+      ? { low: min, high: max }
+      : { low: 0, high: 1 };
+  }
+  return getTransformedDataBounds(data, dataTransform.value);
+}
+
 async function fetchAndRenderData(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
@@ -649,12 +665,9 @@ async function fetchAndRenderData(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
 
-  const { missingValue, fillValue } = getDataBounds(datavar, rawData);
+  const { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
-  const transformedBounds = getTransformedDataBounds(
-    rawData,
-    dataTransform.value
-  );
+  const transformedBounds = getTransformedBoundsForDisplay(min, max, rawData);
 
   const material = makeMaterial(rawData);
 

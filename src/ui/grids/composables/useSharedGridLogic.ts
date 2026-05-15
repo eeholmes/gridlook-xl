@@ -316,10 +316,13 @@ export function useSharedGridLogic() {
         HISTOGRAM_SUMMARY_BINS
       );
     } else {
-      const transformedData = Float32Array.from(
-        data as ArrayLike<number>,
-        (v) => applyDataTransform(v, dataTransform.value)
-      );
+      const sourceData = data as ArrayLike<number>;
+      const transformedData =
+        dataTransform.value === DATA_TRANSFORMS.LINEAR
+          ? sourceData
+          : Float32Array.from(sourceData, (v) =>
+              applyDataTransform(v, dataTransform.value)
+            );
       summary = buildHistogramSummary(
         transformedData,
         min,
