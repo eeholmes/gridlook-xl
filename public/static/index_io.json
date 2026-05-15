@@ -10,7 +10,21 @@
             "time": {
                 "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/",
                 "dataset": "IO.zarr"
+            },
+            "datasources": {
+                "CHL_cmes-gapfree": {
+                    "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/",
+                    "dataset": "IO.zarr",
+                    "default_range": {
+                        "low": 0,
+                        "high": 30
+                    },
+                    "default_colormap": {
+                        "name": "turbo",
+                        "inverted": false
+                    }
+                  }
+                }
             }
-        }
     ]
 }
