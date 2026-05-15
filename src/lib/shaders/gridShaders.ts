@@ -45,7 +45,7 @@ float posterize(float value, float levels) {
 const dataTransformGLSL = `
 float transform_value(float value, int transformMode) {
     if (transformMode == 1) {
-        return (is_finite(value) && value > 0.0) ? log(value) / log(10.0) : nan("");
+        return (is_finite(value) && value > 0.0) ? log(value) / log(10.0) : (0.0 / 0.0);
     }
     return value;
 }
