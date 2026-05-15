@@ -1,4 +1,16 @@
 {
     "name": "Indian Ocean Zarr",
-    "default_var": "CHL_cmes-gapfree"
+    "default_var": "CHL_cmes-gapfree",
+    "levels": [
+        {
+            "grid": {
+                "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/",
+                "dataset": "IO.zarr"
+            },
+            "time": {
+                "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/",
+                "dataset": "IO.zarr"
+            }
+        }
+    ]
 }
