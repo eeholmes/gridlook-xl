@@ -23,8 +23,11 @@ async function openDatasetGroup(
     const store = zarr.root(baseStore);
     try {
       return await zarr.open(store, { kind: "group" });
-    } catch {
-      throw consolidatedError;
+    } catch (unconsolidatedError) {
+      throw new AggregateError(
+        [consolidatedError, unconsolidatedError],
+        `Failed to open ${format} Zarr group at ${storePath}`
+      );
     }
   }
 }
