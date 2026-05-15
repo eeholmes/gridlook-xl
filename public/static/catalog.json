@@ -24,7 +24,12 @@
     },
     {
       "title": "Indian Ocean Zarr",
-      "url": "https://https://eeholmes.github.io/gridlook/static/index_io.json",
+      "url": "https://eeholmes.github.io/gridlook/static/index_io.json",
+      "tag": "regular"
+    },
+    {
+      "title": "CHLA-Z",
+      "url": "https://eeholmes.github.io/gridlook/static/index_chla_z.json",
       "tag": "regular"
     }
   ]

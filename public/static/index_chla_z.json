@@ -1,0 +1,30 @@
+{
+    "name": "CHLA-Z",
+    "default_var": "CHLA",
+    "levels": [
+        {
+            "grid": {
+                "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/",
+                "dataset": "zarr"
+            },
+            "time": {
+                "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/",
+                "dataset": "zarr"
+            },
+            "datasources": {
+                "CHLA": {
+                    "store": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/",
+                    "dataset": "zarr/CHLA",
+                    "default_range": {
+                        "low": 0,
+                        "high": 30
+                    },
+                    "default_colormap": {
+                        "name": "turbo",
+                        "inverted": false
+                    }
+                  }
+                }
+            }
+    ]
+}
