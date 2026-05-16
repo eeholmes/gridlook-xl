@@ -4,15 +4,59 @@ import { ZarrDataManager } from "./ZarrDataManager.ts";
 
 import { type TSources } from "@/lib/types/GlobeTypes.ts";
 
+function normalizeNumericScalar(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return undefined;
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return numeric;
+    }
+    const parsed = parseFloat(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+    const arrayLike = value as unknown as {
+      length: number;
+      [index: number]: unknown;
+    };
+    if (arrayLike.length > 0) {
+      return normalizeNumericScalar(arrayLike[0]);
+    }
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    return normalizeNumericScalar(value[0]);
+  }
+  return undefined;
+}
+
+function asFloat32(value: unknown): number | undefined {
+  const normalized = normalizeNumericScalar(value);
+  if (normalized === undefined) {
+    return undefined;
+  }
+  return new Float32Array([normalized])[0];
+}
+
 export function getMissingValue(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
 ) {
   const attributes = datavar.attrs;
   if (Object.hasOwn(attributes, "missingValue")) {
-    return new Float32Array([Number(attributes.missingValue)])[0];
+    return asFloat32(attributes.missingValue) ?? NaN;
   }
   if (Object.hasOwn(attributes, "missing_value")) {
-    return new Float32Array([Number(attributes.missing_value)])[0];
+    return asFloat32(attributes.missing_value) ?? NaN;
   }
   return NaN;
 }
@@ -26,21 +70,22 @@ export function getMissingValue(
 export function getFillValue(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
 ) {
-  if (datavar.fillValue) {
-    return datavar.fillValue as number;
+  const metadataFillValue = asFloat32(datavar.fillValue);
+  if (metadataFillValue !== undefined) {
+    return metadataFillValue;
   }
   const attributes = datavar.attrs;
   if (Object.hasOwn(attributes, "fillValue")) {
-    return new Float32Array([Number(attributes.fillValue)])[0];
+    return asFloat32(attributes.fillValue) ?? NaN;
   }
   if (Object.hasOwn(attributes, "fill_value")) {
-    return new Float32Array([Number(attributes.fill_value)])[0];
+    return asFloat32(attributes.fill_value) ?? NaN;
   }
   if (Object.hasOwn(attributes, "_FillValue")) {
-    return new Float32Array([Number(attributes._FillValue)])[0];
+    return asFloat32(attributes._FillValue) ?? NaN;
   }
   if (Object.hasOwn(attributes, "_fillvalue")) {
-    return new Float32Array([Number(attributes._fillvalue)])[0];
+    return asFloat32(attributes._fillvalue) ?? NaN;
   }
   return NaN;
 }
