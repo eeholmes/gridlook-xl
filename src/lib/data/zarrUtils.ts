@@ -26,12 +26,9 @@ function normalizeNumericScalar(value: unknown): number | undefined {
     }
   }
   if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
-    const arrayLike = value as unknown as {
-      length: number;
-      [index: number]: unknown;
-    };
-    if (arrayLike.length > 0) {
-      return normalizeNumericScalar(arrayLike[0]);
+    const firstValue = Reflect.get(value, 0);
+    if (firstValue !== undefined) {
+      return normalizeNumericScalar(firstValue);
     }
   }
   if (Array.isArray(value) && value.length > 0) {
