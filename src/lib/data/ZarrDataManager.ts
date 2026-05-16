@@ -21,11 +21,7 @@ export type TZarrVariableMetadata = {
 
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
 
-type TV3DataTypeMetadata =
-  | string
-  | {
-      name?: string;
-    };
+type TV3DataTypeMetadata = string | Record<string, unknown>;
 export class ZarrDataManager {
   private static pendingStore: Promise<
     zarr.Location<zarr.AsyncReadable>
@@ -226,8 +222,7 @@ export class ZarrDataManager {
       const isUnsupported =
         metadata.zarr_format === 3 &&
         typeof metadata.data_type === "object" &&
-        metadata.data_type !== null &&
-        metadata.data_type.name === "numpy.datetime64";
+        metadata.data_type !== null;
       this.unsupportedV3ObjectDtypeCache.set(cacheKey, isUnsupported);
       return isUnsupported;
     } catch {
