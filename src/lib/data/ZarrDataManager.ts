@@ -28,6 +28,10 @@ export class ZarrDataManager {
   > | null = null;
   private static fetchStorePath: string | null = null;
   private static unsupportedV3ObjectDtypeCache = new Map<string, boolean>();
+  private static pendingUnsupportedV3ObjectDtypeChecks = new Map<
+    string,
+    Promise<boolean>
+  >();
 
   private static normalizeStorePath(store: string) {
     return store.replace(/\/+$/, "");
@@ -196,6 +200,7 @@ export class ZarrDataManager {
     this.pendingStore = null;
     this.fetchStorePath = null;
     this.unsupportedV3ObjectDtypeCache.clear();
+    this.pendingUnsupportedV3ObjectDtypeChecks.clear();
   }
 
   static async hasUnsupportedV3ObjectDataType(
@@ -206,28 +211,40 @@ export class ZarrDataManager {
     if (this.unsupportedV3ObjectDtypeCache.has(cacheKey)) {
       return this.unsupportedV3ObjectDtypeCache.get(cacheKey)!;
     }
+    const pendingCheck =
+      this.pendingUnsupportedV3ObjectDtypeChecks.get(cacheKey);
+    if (pendingCheck) {
+      return await pendingCheck;
+    }
 
     const metadataUrl = this.getVariableMetadataUrl(datasource, variable);
-    try {
-      const response = await fetch(metadataUrl);
-      if (!response.ok) {
+    const checkPromise = (async () => {
+      try {
+        const response = await fetch(metadataUrl);
+        if (!response.ok) {
+          this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
+          return false;
+        }
+        const metadata = (await response.json()) as {
+          zarr_format?: number;
+          data_type?: TV3DataTypeMetadata;
+        };
+
+        const isUnsupported =
+          metadata.zarr_format === 3 &&
+          typeof metadata.data_type === "object" &&
+          metadata.data_type !== null;
+        this.unsupportedV3ObjectDtypeCache.set(cacheKey, isUnsupported);
+        return isUnsupported;
+      } catch {
         this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
         return false;
       }
-      const metadata = (await response.json()) as {
-        zarr_format?: number;
-        data_type?: TV3DataTypeMetadata;
-      };
+    })();
 
-      const isUnsupported =
-        metadata.zarr_format === 3 &&
-        typeof metadata.data_type === "object" &&
-        metadata.data_type !== null;
-      this.unsupportedV3ObjectDtypeCache.set(cacheKey, isUnsupported);
-      return isUnsupported;
-    } catch {
-      this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
-      return false;
-    }
+    this.pendingUnsupportedV3ObjectDtypeChecks.set(cacheKey, checkPromise);
+    const result = await checkPromise;
+    this.pendingUnsupportedV3ObjectDtypeChecks.delete(cacheKey);
+    return result;
   }
 }

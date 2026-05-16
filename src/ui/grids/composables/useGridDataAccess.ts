@@ -12,6 +12,8 @@ import type {
 } from "@/lib/types/GlobeTypes.ts";
 import { useLog } from "@/utils/logging.ts";
 
+type TCoordinateValue = number | bigint | string;
+
 /* eslint-disable-next-line max-lines-per-function */
 export function useGridDataAccess() {
   const { logError, logWarning } = useLog();
@@ -49,7 +51,6 @@ export function useGridDataAccess() {
     rawValues: zarr.Chunk<zarr.DataType>["data"],
     index: number
   ) {
-    type TCoordinateValue = number | bigint | string;
     if (
       rawValues instanceof zarr.UnicodeStringArray ||
       rawValues instanceof zarr.ByteStringArray

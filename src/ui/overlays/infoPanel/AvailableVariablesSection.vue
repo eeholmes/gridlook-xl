@@ -107,7 +107,7 @@ async function loadVariableMetadata(
       updateMetadata(name, {
         ...metadataByName.value[name],
         loading: false,
-        dtype: "unsupported object-style data_type",
+        dtype: "unsupported",
         error: null,
       });
       return;
