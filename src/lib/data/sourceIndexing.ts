@@ -244,6 +244,18 @@ async function enrichMetadata(
 
     for (const varname of vars) {
       try {
+        if (
+          format === "v3" &&
+          (await ZarrDataManager.hasUnsupportedV3ObjectDataType(
+            datasources[varname],
+            varname
+          ))
+        ) {
+          console.warn(
+            `Skipping metadata enrichment for '${varname}' because Zarr v3 object-style data_type is not yet supported.`
+          );
+          continue;
+        }
         const variable = await zarr.open(root.resolve(`/${varname}`), {
           kind: "array",
         });

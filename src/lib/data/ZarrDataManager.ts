@@ -20,11 +20,18 @@ export type TZarrVariableMetadata = {
 };
 
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
+
+type TV3DataTypeMetadata =
+  | string
+  | {
+      name?: string;
+    };
 export class ZarrDataManager {
   private static pendingStore: Promise<
     zarr.Location<zarr.AsyncReadable>
   > | null = null;
   private static fetchStorePath: string | null = null;
+  private static unsupportedV3ObjectDtypeCache = new Map<string, boolean>();
 
   private static normalizeStorePath(store: string) {
     return store.replace(/\/+$/, "");
@@ -32,6 +39,24 @@ export class ZarrDataManager {
 
   private static normalizeDatasetPath(dataset: string) {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
+  }
+
+  private static joinPath(...parts: string[]) {
+    return parts
+      .map((part) => part.replace(/^\/+|\/+$/g, ""))
+      .filter(Boolean)
+      .join("/");
+  }
+
+  private static getVariableMetadataUrl(
+    datasource: TDatasetSource,
+    variable: string
+  ) {
+    const storePath = this.normalizeStorePath(datasource.store);
+    const datasetPath = this.normalizeDatasetPath(datasource.dataset);
+    const variablePath = variable.replace(/^\/+|\/+$/g, "");
+    const relativePath = this.joinPath(datasetPath, variablePath, "zarr.json");
+    return `${storePath}/${relativePath}`;
   }
 
   public static async createNewStore(storePath: string) {
@@ -174,5 +199,40 @@ export class ZarrDataManager {
   static invalidateCache() {
     this.pendingStore = null;
     this.fetchStorePath = null;
+    this.unsupportedV3ObjectDtypeCache.clear();
+  }
+
+  static async hasUnsupportedV3ObjectDataType(
+    datasource: TDatasetSource,
+    variable: string
+  ) {
+    const cacheKey = `${datasource.store}|${datasource.dataset}|${variable}`;
+    if (this.unsupportedV3ObjectDtypeCache.has(cacheKey)) {
+      return this.unsupportedV3ObjectDtypeCache.get(cacheKey)!;
+    }
+
+    const metadataUrl = this.getVariableMetadataUrl(datasource, variable);
+    try {
+      const response = await fetch(metadataUrl);
+      if (!response.ok) {
+        this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
+        return false;
+      }
+      const metadata = (await response.json()) as {
+        zarr_format?: number;
+        data_type?: TV3DataTypeMetadata;
+      };
+
+      const isUnsupported =
+        metadata.zarr_format === 3 &&
+        typeof metadata.data_type === "object" &&
+        metadata.data_type !== null &&
+        metadata.data_type.name === "numpy.datetime64";
+      this.unsupportedV3ObjectDtypeCache.set(cacheKey, isUnsupported);
+      return isUnsupported;
+    } catch {
+      this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
+      return false;
+    }
   }
 }

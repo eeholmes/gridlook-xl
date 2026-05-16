@@ -17,5 +17,16 @@ export function useLog() {
     });
   }
 
-  return { logError };
+  function logWarning(message: string, context?: string) {
+    const prefix = context ?? "Warning";
+    console.warn(prefix, message);
+    toast.add({
+      summary: prefix,
+      detail: message,
+      severity: "warn",
+      life: 4000,
+    });
+  }
+
+  return { logError, logWarning };
 }

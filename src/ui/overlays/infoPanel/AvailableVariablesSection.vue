@@ -25,11 +25,24 @@ const props = defineProps<{
 
 const store = useGlobeControlStore();
 const { varnameSelector } = storeToRefs(store);
-const { logError } = useLog();
+const { logError, logWarning } = useLog();
 
 const metadataByName = ref<Record<string, TVariableMetadata>>({});
 const selectedAttributesVariableName = ref<string | null>(null);
 let metadataLoadId = 0;
+const warnedUnsupportedCoordinates = new Set<string>();
+
+function warnUnsupportedCoordinateMetadata(source: TDataSource, name: string) {
+  const warningKey = `${source.store}|${source.dataset}|${name}`;
+  if (warnedUnsupportedCoordinates.has(warningKey)) {
+    return;
+  }
+  warnedUnsupportedCoordinates.add(warningKey);
+  logWarning(
+    `Skipping metadata load for '${name}' because Zarr v3 object-style data_type is not yet supported.`,
+    "Unsupported coordinate metadata"
+  );
+}
 
 function normalizeDimensionNames(
   dimensionNames: unknown,
@@ -84,6 +97,22 @@ async function loadVariableMetadata(
   source: TDataSource
 ) {
   try {
+    const hasUnsupportedDataType =
+      await ZarrDataManager.hasUnsupportedV3ObjectDataType(source, name);
+    if (hasUnsupportedDataType) {
+      warnUnsupportedCoordinateMetadata(source, name);
+      if (loadId !== metadataLoadId) {
+        return;
+      }
+      updateMetadata(name, {
+        ...metadataByName.value[name],
+        loading: false,
+        dtype: "unsupported object-style data_type",
+        error: null,
+      });
+      return;
+    }
+
     const variable = await ZarrDataManager.getVariableInfo(source, name);
     if (loadId !== metadataLoadId) {
       return;

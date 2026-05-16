@@ -14,10 +14,58 @@ import { useLog } from "@/utils/logging.ts";
 
 /* eslint-disable-next-line max-lines-per-function */
 export function useGridDataAccess() {
-  const { logError } = useLog();
+  const { logError, logWarning } = useLog();
   const datavars: ShallowRef<
     Record<string, zarr.Array<zarr.DataType, zarr.FetchStore>>
   > = shallowRef({});
+  const warnedUnsupportedCoordinates = new Set<string>();
+
+  async function isUnsupportedCoordinateDataType(
+    datasource: TDataSource,
+    dimensionName: string
+  ) {
+    return await ZarrDataManager.hasUnsupportedV3ObjectDataType(
+      datasource,
+      dimensionName
+    );
+  }
+
+  function warnUnsupportedCoordinateOnce(
+    datasource: TDataSource,
+    dimensionName: string
+  ) {
+    const warningKey = `${datasource.store}|${datasource.dataset}|${dimensionName}`;
+    if (warnedUnsupportedCoordinates.has(warningKey)) {
+      return;
+    }
+    warnedUnsupportedCoordinates.add(warningKey);
+    logWarning(
+      `Skipping coordinate '${dimensionName}' because Zarr v3 object-style data_type is not yet supported.`,
+      "Unsupported coordinate metadata"
+    );
+  }
+
+  function getCoordinateValues(
+    rawValues: zarr.Chunk<zarr.DataType>["data"],
+    index: number
+  ) {
+    type TCoordinateValue = number | bigint | string;
+    if (
+      rawValues instanceof zarr.UnicodeStringArray ||
+      rawValues instanceof zarr.ByteStringArray
+    ) {
+      const stringValues = [...rawValues];
+      return {
+        dimValues: stringValues as ArrayLike<TCoordinateValue>,
+        current: stringValues[index] as TCoordinateValue,
+      };
+    }
+    const numericValues = rawValues as ArrayLike<TCoordinateValue>;
+    return {
+      dimValues: numericValues,
+      current: numericValues[index] as TCoordinateValue,
+    };
+  }
 
   function resetDataVars() {
     datavars.value = {};
@@ -54,6 +102,10 @@ export function useGridDataAccess() {
     }
     try {
       const myDatasource = datasources!.levels[0].time;
+      if (await isUnsupportedCoordinateDataType(myDatasource, "time")) {
+        warnUnsupportedCoordinateOnce(myDatasource, "time");
+        return {};
+      }
       const timevalues = (
         await ZarrDataManager.getVariableData(myDatasource, "time", [null])
       ).data as Int32Array;
@@ -83,30 +135,17 @@ export function useGridDataAccess() {
         return {};
       }
 
+      if (await isUnsupportedCoordinateDataType(datasource, dimensionName)) {
+        warnUnsupportedCoordinateOnce(datasource, dimensionName);
+        return {};
+      }
+
       const dimArray = await ZarrDataManager.getVariableData(
         datasource,
         dimensionName,
         [null]
       );
-
-      type TCoordinateValue = number | bigint | string;
-
-      const rawValues = dimArray.data;
-      let dimValues: ArrayLike<TCoordinateValue>;
-      let current: TCoordinateValue;
-
-      if (
-        rawValues instanceof zarr.UnicodeStringArray ||
-        rawValues instanceof zarr.ByteStringArray
-      ) {
-        const stringValues = [...rawValues];
-        dimValues = stringValues;
-        current = stringValues[index] as TCoordinateValue;
-      } else {
-        const numericValues = rawValues as ArrayLike<TCoordinateValue>;
-        dimValues = numericValues;
-        current = numericValues[index] as TCoordinateValue;
-      }
+      const { dimValues, current } = getCoordinateValues(dimArray.data, index);
 
       const dimvar = await ZarrDataManager.getVariableInfo(
         datasource,
