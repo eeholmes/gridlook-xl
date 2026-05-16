@@ -57,9 +57,10 @@ export class ZarrDataManager {
           withRangeCoalescing: zarr.withRangeCoalescing,
         });
       } catch (error) {
-        throw new Error(`Failed to open icechunk store: ${parsed.url}`, {
-          cause: error,
-        });
+        throw new Error(
+          `Failed to open icechunk store from ${storePath} (resolved URL: ${parsed.url})`,
+          { cause: error }
+        );
       }
     }
 
