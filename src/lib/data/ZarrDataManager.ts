@@ -52,9 +52,15 @@ export class ZarrDataManager {
   public static async createNewStore(storePath: string) {
     const parsed = this.parseStorePath(storePath);
     if (parsed.backend === "icechunk") {
-      return await IcechunkStore.open(parsed.url, {
-        withRangeCoalescing: zarr.withRangeCoalescing,
-      });
+      try {
+        return await IcechunkStore.open(parsed.url, {
+          withRangeCoalescing: zarr.withRangeCoalescing,
+        });
+      } catch (error) {
+        throw new Error(`Failed to open icechunk store: ${parsed.url}`, {
+          cause: error,
+        });
+      }
     }
 
     const cache = new QuickLRU<string, Uint8Array | undefined>({
