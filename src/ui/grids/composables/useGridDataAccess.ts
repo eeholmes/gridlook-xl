@@ -47,6 +47,45 @@ export function useGridDataAccess() {
     );
   }
 
+  function warnTimeCoordinateFallbackOnce(datasource: TDataSource) {
+    const warningKey = `${datasource.store}|${datasource.dataset}|time_fallback`;
+    if (warnedUnsupportedCoordinates.has(warningKey)) {
+      return;
+    }
+    warnedUnsupportedCoordinates.add(warningKey);
+    logWarning(
+      "Using index-based fallback values for coordinate 'time' because Zarr v3 object-style data_type is not yet supported.",
+      "Unsupported coordinate metadata"
+    );
+  }
+
+  async function getTimeIndexFallbackInfo(
+    datasource: TDataSource,
+    index: number
+  ): Promise<TDimInfo> {
+    const metadata = await ZarrDataManager.getVariableMetadata(
+      datasource,
+      "time"
+    );
+    const timeLength = metadata?.shape?.[0];
+    if (
+      typeof timeLength !== "number" ||
+      !Number.isInteger(timeLength) ||
+      timeLength <= 0
+    ) {
+      return {};
+    }
+
+    const values = Int32Array.from({ length: timeLength }, (_, i) => i);
+    const boundedIndex = Math.max(0, Math.min(index, values.length - 1));
+    warnTimeCoordinateFallbackOnce(datasource);
+    return {
+      values,
+      current: values[boundedIndex],
+      attrs: (metadata?.attributes ?? metadata?.attrs ?? {}) as zarr.Attributes,
+    };
+  }
+
   function getCoordinateValues(
     rawValues: zarr.Chunk<zarr.DataType>["data"],
     index: number
@@ -104,8 +143,7 @@ export function useGridDataAccess() {
     try {
       const myDatasource = datasources!.levels[0].time;
       if (await isUnsupportedCoordinateDataType(myDatasource, "time")) {
-        warnUnsupportedCoordinateOnce(myDatasource, "time");
-        return {};
+        return await getTimeIndexFallbackInfo(myDatasource, index);
       }
       const timevalues = (
         await ZarrDataManager.getVariableData(myDatasource, "time", [null])

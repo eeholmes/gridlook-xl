@@ -22,15 +22,26 @@ export type TZarrVariableMetadata = {
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
 
 type TV3DataTypeMetadata = string | Record<string, unknown>;
+type TVariableJsonMetadata = {
+  zarr_format?: number;
+  data_type?: TV3DataTypeMetadata;
+  shape?: readonly number[];
+  attrs?: zarr.Attributes;
+  attributes?: zarr.Attributes;
+};
 export class ZarrDataManager {
   private static pendingStore: Promise<
     zarr.Location<zarr.AsyncReadable>
   > | null = null;
   private static fetchStorePath: string | null = null;
   private static unsupportedV3ObjectDtypeCache = new Map<string, boolean>();
-  private static pendingUnsupportedV3ObjectDtypeChecks = new Map<
+  private static variableMetadataCache = new Map<
     string,
-    Promise<boolean>
+    TVariableJsonMetadata
+  >();
+  private static pendingVariableMetadataChecks = new Map<
+    string,
+    Promise<TVariableJsonMetadata | null>
   >();
 
   private static normalizeStorePath(store: string) {
@@ -200,7 +211,42 @@ export class ZarrDataManager {
     this.pendingStore = null;
     this.fetchStorePath = null;
     this.unsupportedV3ObjectDtypeCache.clear();
-    this.pendingUnsupportedV3ObjectDtypeChecks.clear();
+    this.variableMetadataCache.clear();
+    this.pendingVariableMetadataChecks.clear();
+  }
+
+  static async getVariableMetadata(
+    datasource: TDatasetSource,
+    variable: string
+  ) {
+    const cacheKey = `${datasource.store}|${datasource.dataset}|${variable}`;
+    if (this.variableMetadataCache.has(cacheKey)) {
+      return this.variableMetadataCache.get(cacheKey)!;
+    }
+    const pendingCheck = this.pendingVariableMetadataChecks.get(cacheKey);
+    if (pendingCheck) {
+      return await pendingCheck;
+    }
+
+    const metadataUrl = this.getVariableMetadataUrl(datasource, variable);
+    const checkPromise = (async () => {
+      try {
+        const response = await fetch(metadataUrl);
+        if (!response.ok) {
+          return null;
+        }
+        const metadata = (await response.json()) as TVariableJsonMetadata;
+        this.variableMetadataCache.set(cacheKey, metadata);
+        return metadata;
+      } catch {
+        return null;
+      }
+    })();
+
+    this.pendingVariableMetadataChecks.set(cacheKey, checkPromise);
+    const result = await checkPromise;
+    this.pendingVariableMetadataChecks.delete(cacheKey);
+    return result;
   }
 
   static async hasUnsupportedV3ObjectDataType(
@@ -211,40 +257,12 @@ export class ZarrDataManager {
     if (this.unsupportedV3ObjectDtypeCache.has(cacheKey)) {
       return this.unsupportedV3ObjectDtypeCache.get(cacheKey)!;
     }
-    const pendingCheck =
-      this.pendingUnsupportedV3ObjectDtypeChecks.get(cacheKey);
-    if (pendingCheck) {
-      return await pendingCheck;
-    }
-
-    const metadataUrl = this.getVariableMetadataUrl(datasource, variable);
-    const checkPromise = (async () => {
-      try {
-        const response = await fetch(metadataUrl);
-        if (!response.ok) {
-          this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
-          return false;
-        }
-        const metadata = (await response.json()) as {
-          zarr_format?: number;
-          data_type?: TV3DataTypeMetadata;
-        };
-
-        const isUnsupported =
-          metadata.zarr_format === 3 &&
-          typeof metadata.data_type === "object" &&
-          metadata.data_type !== null;
-        this.unsupportedV3ObjectDtypeCache.set(cacheKey, isUnsupported);
-        return isUnsupported;
-      } catch {
-        this.unsupportedV3ObjectDtypeCache.set(cacheKey, false);
-        return false;
-      }
-    })();
-
-    this.pendingUnsupportedV3ObjectDtypeChecks.set(cacheKey, checkPromise);
-    const result = await checkPromise;
-    this.pendingUnsupportedV3ObjectDtypeChecks.delete(cacheKey);
-    return result;
+    const metadata = await this.getVariableMetadata(datasource, variable);
+    const isUnsupported =
+      metadata?.zarr_format === 3 &&
+      typeof metadata.data_type === "object" &&
+      metadata.data_type !== null;
+    this.unsupportedV3ObjectDtypeCache.set(cacheKey, isUnsupported);
+    return isUnsupported;
   }
 }
