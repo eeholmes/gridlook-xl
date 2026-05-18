@@ -1,4 +1,4 @@
-import { HttpStorage, IcechunkStore } from "icechunk-js";
+import { HttpStorage, IcechunkStore, NotFoundError } from "icechunk-js";
 import type { ByteRange, RequestOptions, Storage } from "icechunk-js";
 import QuickLRU from "quick-lru";
 import * as zarr from "zarrita";
@@ -58,6 +58,7 @@ export class ZarrDataManager {
 
   private static createRangeFallbackStorage(baseUrl: string): Storage {
     const storage = new HttpStorage(baseUrl);
+    const fullObjectCache = new QuickLRU<string, Uint8Array>({ maxSize: 32 });
     return {
       async getObject(
         path: string,
@@ -70,13 +71,25 @@ export class ZarrDataManager {
         try {
           return await storage.getObject(path, range, options);
         } catch (error) {
-          if (
-            !(error instanceof Error) ||
-            !error.message.includes("Failed to fetch")
-          ) {
+          if (error instanceof NotFoundError) {
             throw error;
           }
-          const data = await storage.getObject(path, undefined, options);
+          const cached = fullObjectCache.get(path);
+          if (cached && cached.length >= range.end) {
+            return cached.slice(range.start, range.end);
+          }
+
+          let data: Uint8Array;
+          try {
+            data = await storage.getObject(path, undefined, options);
+            fullObjectCache.set(path, data);
+          } catch (fallbackError) {
+            throw new AggregateError(
+              [error, fallbackError],
+              `Failed range request and full-object fallback for ${baseUrl}/${path.replace(/^\/+/, "")}`
+            );
+          }
+
           if (data.length >= range.end) {
             return data.slice(range.start, range.end);
           }
