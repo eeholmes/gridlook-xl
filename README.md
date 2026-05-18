@@ -32,7 +32,7 @@ Gridlook can also load catalog JSON files that list multiple datasets. The catal
 
 ## Examples
 
-Not all of these work. This is for testing and coming up with the issues to make it work better.
+These are mostly icechunk because that is what I am debugging. Not all of these work. This is for testing and coming up with the issues to make it work better. Zarr v2 works well from what I have tested. Zarr v3 works if metadata (zarr.json) is consolidated. Icechunk more or less works.
 
 | Dataset | Format | Comments |
 |---|---|---|
