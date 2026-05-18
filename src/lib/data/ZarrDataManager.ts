@@ -1,4 +1,5 @@
-import { IcechunkStore } from "icechunk-js";
+import { HttpStorage, IcechunkStore } from "icechunk-js";
+import type { ByteRange, RequestOptions, Storage } from "icechunk-js";
 import QuickLRU from "quick-lru";
 import * as zarr from "zarrita";
 
@@ -55,11 +56,49 @@ export class ZarrDataManager {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }
 
+  private static createRangeFallbackStorage(baseUrl: string): Storage {
+    const storage = new HttpStorage(baseUrl);
+    return {
+      async getObject(
+        path: string,
+        range?: ByteRange,
+        options?: RequestOptions
+      ) {
+        if (!range) {
+          return await storage.getObject(path, undefined, options);
+        }
+        try {
+          return await storage.getObject(path, range, options);
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !error.message.includes("Failed to fetch")
+          ) {
+            throw error;
+          }
+          const data = await storage.getObject(path, undefined, options);
+          if (data.length >= range.end) {
+            return data.slice(range.start, range.end);
+          }
+          throw error;
+        }
+      },
+      async exists(path: string, options?: RequestOptions) {
+        return await storage.exists(path, options);
+      },
+      listPrefix(prefix: string) {
+        return storage.listPrefix(prefix);
+      },
+    };
+  }
+
   public static async createNewStore(storePath: string) {
     const parsed = this.parseStorePath(storePath);
     if (parsed.backend === "icechunk") {
       try {
-        return await IcechunkStore.open(parsed.url);
+        return await IcechunkStore.open(
+          this.createRangeFallbackStorage(parsed.url)
+        );
       } catch (error) {
         throw new Error(
           `Failed to open icechunk store from ${storePath} (resolved URL: ${parsed.url})`,
