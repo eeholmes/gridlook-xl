@@ -405,5 +405,13 @@ export function castDataVarToFloat32(
   if (Array.isArray(rawData)) {
     return Float32Array.from(rawData);
   }
-  throw new TypeError("Unsupported data type for Float32 texture conversion");
+  const receivedType =
+    rawData === null
+      ? "null"
+      : rawData === undefined
+        ? "undefined"
+        : (rawData.constructor?.name ?? typeof rawData);
+  throw new TypeError(
+    `Unsupported data type for Float32 texture conversion. Expected a numeric typed array or array-like input, received: ${receivedType}`
+  );
 }
