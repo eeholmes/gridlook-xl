@@ -1,24 +1,20 @@
 # gridlook
 
-GridLook is a WebGL-based viewer for Earth system model (ESM) output. It supports cloud-hosted Zarr datasets.
+This is a fork of [GridLook](https://github.com/d70-t/gridlook) is a WebGL-based viewer for cloud-hosted Zarr datasets. You can view any **CORS-enabled**, public Zarr dataset with GridLook. I have modified it to support Zarr v3 (better), Icechunk stores, and some number formating that it didn't support out of box. I also added a GitHub Action to server the gridlook viewer on GitHub Pages.
 
 ![](docs/assets/showcase.webp)
 
-## Try It Live
+## Try out my fork:
 
-Try out the example dataset:
+https://eeholmes.github.io/gridlook.
 
-https://gridlook.pages.dev
-
-You can view any CORS-enabled, public Zarr dataset with GridLook:
+## Try on your own Zarr store:
 
 ```
 https://gridlook.pages.dev/#<ZARR_URI>
 ```
 
-Gridlook can also load catalog JSON files that list multiple datasets. The catalog format and deployment options are documented in [docs/catalogs.md](docs/catalogs.md).
-
-A guide to the viewer keyboard, mouse, and touch interaction is available in [docs/Controls.md](docs/Controls.md).
+Gridlook can also load catalog JSON files that list multiple datasets. The catalog format and deployment options are documented in [docs/catalogs.md](docs/catalogs.md). A guide to the viewer keyboard, mouse, and touch interaction is available in [docs/Controls.md](docs/Controls.md).
 
 ## Project Setup
 
