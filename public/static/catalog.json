@@ -3,12 +3,12 @@
   "title": "NMFS Open Science Catalog",
   "datasets": [
     {
-      "title": "ARCO-OCEAN",
+      "title": "ARCO-OCEAN (Zarr v2)",
       "url": "https://ogs-arco-ocean.s3.eu-south-1.amazonaws.com/dataset/tres=1d/res=0p25/levels=10/",
       "tag": "regular"
     },
     {
-      "title": "Indian Ocean - Mind the Gap",
+      "title": "Indian Ocean - Mind the Gap (Zarr v2)",
       "url": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/IO.zarr/",
       "tag": "regular"
     },
@@ -18,18 +18,18 @@
       "tag": "regular"
     },
     {
-      "title": "dpp0066 - 2d_ml @ R02B06",
-      "url": "https://gridlook.pages.dev/static/index_mr_dpp0066.json",
-      "tag": "triangular"
-    },
-    {
-      "title": "Indian Ocean Zarr",
-      "url": "https://eeholmes.github.io/gridlook/static/index_io.json",
+      "title": "CHLA-Z (Zarr v3)",
+      "url": "https://eeholmes.github.io/gridlook/static/index_chla_z.json",
       "tag": "regular"
     },
     {
-      "title": "CHLA-Z",
-      "url": "https://eeholmes.github.io/gridlook/static/index_chla_z.json",
+      "title": "ECMWF AIFS (Dynamical)",
+      "url": "icechunk+https://dynamical-ecmwf-aifs-single.s3.us-west-2.amazonaws.com/ecmwf-aifs-single-forecast/v0.1.0.icechunk/",
+      "tag": "regular"
+    },
+    {
+      "title": "DWD ICON (Dynamical)",
+      "url": "icechunk+https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/",
       "tag": "regular"
     }
   ]
