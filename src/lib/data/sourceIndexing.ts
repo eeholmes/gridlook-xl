@@ -11,6 +11,22 @@ import { ZarrDataManager } from "./ZarrDataManager.ts";
 
 import trim from "@/utils/trim.ts";
 
+type TNodeListedStore = zarr.AsyncReadable & {
+  listNodes: () => Array<{ path: string; nodeData?: { type?: string } }>;
+};
+
+function isNodeListedStore(
+  store: zarr.AsyncReadable
+): store is TNodeListedStore {
+  return (
+    typeof (
+      store as {
+        listNodes?: unknown;
+      }
+    ).listNodes === "function"
+  );
+}
+
 async function openDatasetGroup(
   storePath: string,
   format: "v2" | "v3"
@@ -130,30 +146,112 @@ async function collectVariables(
   return { candidates, dimensions };
 }
 
+async function collectVariablesFromNodeList(
+  store: TNodeListedStore,
+  root: zarr.Group<zarr.AsyncReadable>,
+  src: string
+): Promise<{
+  candidates: PromiseSettledResult<Record<string, TDataSource>>[];
+  dimensions: Set<string>;
+}> {
+  const dimensions = new Set<string>();
+  const candidates = await Promise.allSettled(
+    store
+      .listNodes()
+      .filter((node) => node.nodeData?.type === "array")
+      .map(async (node) => {
+        const variable = await zarr.open(root.resolve(node.path), {
+          kind: "array",
+        });
+        searchDimensionsAndCoordinates(dimensions, variable);
+
+        const varname = node.path.slice(1);
+        return {
+          [varname]: {
+            store: src,
+            dataset: "",
+            hidden: !isValidVariable(
+              varname,
+              variable.shape,
+              variable.dimensionNames as string[]
+            ),
+            attrs: {
+              ...variable.attrs,
+              dimensionNames: variable.dimensionNames,
+            },
+          },
+        };
+      })
+  );
+
+  return { candidates, dimensions };
+}
+
+function mergeDatasourceCandidates(
+  candidates: PromiseSettledResult<Record<string, TDataSource>>[],
+  dimensions: Set<string>
+): Record<string, TDataSource> {
+  return candidates
+    .filter((promise) => promise.status === "fulfilled")
+    .map((promise) => promise.value)
+    .filter((obj) => Object.keys(obj).length > 0)
+    .map((obj) => {
+      const varname = Object.keys(obj)[0];
+      if (dimensions.has(varname)) {
+        return { [varname]: { ...obj[varname], hidden: true } };
+      }
+      return obj;
+    })
+    .reduce((a, b) => ({ ...a, ...b }), {});
+}
+
 async function processZarrVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
   src: string
 ): Promise<Record<string, TDataSource>> {
   const { candidates, dimensions } = await collectVariables(store, root, src);
+  return mergeDatasourceCandidates(candidates, dimensions);
+}
 
-  // Filter and merge datasources
-  const datasources = candidates
-    .filter((promise) => promise.status === "fulfilled")
-    .map((promise) => promise.value)
-    .filter((obj) => Object.keys(obj).length > 0)
-    .map((obj) => {
-      // Filter out variables that are actually dimensions or coordinates
-      const varname = Object.keys(obj)[0];
-      if (dimensions.has(varname)) {
-        const hiddenObject = { [varname]: { ...obj[varname], hidden: true } };
-        return hiddenObject;
-      }
-      return obj;
-    })
-    .reduce((a, b) => ({ ...a, ...b }), {});
+async function processNodeListedVariables(
+  store: TNodeListedStore,
+  root: zarr.Group<zarr.AsyncReadable>,
+  src: string
+): Promise<Record<string, TDataSource>> {
+  const { candidates, dimensions } = await collectVariablesFromNodeList(
+    store,
+    root,
+    src
+  );
+  return mergeDatasourceCandidates(candidates, dimensions);
+}
 
-  return datasources;
+async function indexFromIcechunkFallback(
+  src: string,
+  v2Error: unknown,
+  v3Error: unknown
+): Promise<TSources> {
+  const icechunkStorePath = ZarrDataManager.toIcechunkStorePath(src);
+  const store = await ZarrDataManager.createNewStore(icechunkStorePath);
+  if (!isNodeListedStore(store)) {
+    throw new AggregateError(
+      [v2Error, v3Error],
+      `Failed to open Zarr source at ${src}`
+    );
+  }
+  const root = await zarr.open(zarr.root(store), { kind: "group" });
+  const datasources = await processNodeListedVariables(
+    store,
+    root,
+    icechunkStorePath
+  );
+  return createIndex(
+    root.attrs?.title as string,
+    datasources,
+    icechunkStorePath,
+    ZARR_FORMAT.V3
+  );
 }
 
 function createIndex(
@@ -195,19 +293,23 @@ export async function indexFromZarr(src: string): Promise<TSources> {
       src,
       ZARR_FORMAT.V2
     );
-  } catch {
-    const store = await zarr.withConsolidatedMetadata(
-      await ZarrDataManager.createNewStore(src),
-      { format: "v3" }
-    );
-    const root = await zarr.open(store, { kind: "group" });
-    const datasources = await processZarrVariables(store, root, src);
-    return createIndex(
-      root.attrs?.title as string,
-      datasources,
-      src,
-      ZARR_FORMAT.V3
-    );
+  } catch (v2Error) {
+    try {
+      const store = await zarr.withConsolidatedMetadata(
+        await ZarrDataManager.createNewStore(src),
+        { format: "v3" }
+      );
+      const root = await zarr.open(store, { kind: "group" });
+      const datasources = await processZarrVariables(store, root, src);
+      return createIndex(
+        root.attrs?.title as string,
+        datasources,
+        src,
+        ZARR_FORMAT.V3
+      );
+    } catch (v3Error) {
+      return await indexFromIcechunkFallback(src, v2Error, v3Error);
+    }
   }
 }
 

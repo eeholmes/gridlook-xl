@@ -45,6 +45,12 @@ export class ZarrDataManager {
     return { backend: "fetch", url: storePath };
   }
 
+  static toIcechunkStorePath(storeUrl: string) {
+    return storeUrl.startsWith(this.ICECHUNK_PREFIX)
+      ? storeUrl
+      : `${this.ICECHUNK_PREFIX}${storeUrl}`;
+  }
+
   private static normalizeDatasetPath(dataset: string) {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }

@@ -21,9 +21,10 @@ Each dataset entry currently supports:
 
 `url` can be either:
 
-- a regular Zarr URL (existing behavior), or
-- an Icechunk URL prefixed with `icechunk+`, for example:
-  `icechunk+https://bucket.s3.amazonaws.com/my-icechunk-repo`
+- a regular Zarr URL (existing behavior),
+- a direct Icechunk repository URL, or
+- an Icechunk URL prefixed with `icechunk+` for explicit backend selection,
+  for example: `icechunk+https://bucket.s3.amazonaws.com/my-icechunk-repo`
 
 Example:
 
