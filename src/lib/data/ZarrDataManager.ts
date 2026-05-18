@@ -59,9 +59,7 @@ export class ZarrDataManager {
     const parsed = this.parseStorePath(storePath);
     if (parsed.backend === "icechunk") {
       try {
-        return await IcechunkStore.open(parsed.url, {
-          withRangeCoalescing: zarr.withRangeCoalescing,
-        });
+        return await IcechunkStore.open(parsed.url);
       } catch (error) {
         throw new Error(
           `Failed to open icechunk store from ${storePath} (resolved URL: ${parsed.url})`,
