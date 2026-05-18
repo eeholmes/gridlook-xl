@@ -363,8 +363,21 @@ export function mapMissingAndFillToNaN(
 }
 
 /**
- * Gridlook cannot handle Float64 and integer types in textures, so cast to Float32
+ * Gridlook cannot handle Float16, Float64, or integer types in textures,
+ * so cast compatible numeric arrays to Float32.
  */
+function isFloat32ConvertibleArray(
+  rawData: unknown
+): rawData is ArrayBufferView<ArrayBufferLike> & ArrayLike<number> {
+  return (
+    ArrayBuffer.isView(rawData) &&
+    !(rawData instanceof DataView) &&
+    !(rawData instanceof Float32Array) &&
+    !(rawData instanceof BigInt64Array) &&
+    !(rawData instanceof BigUint64Array)
+  );
+}
+
 export function castDataVarToFloat32(
   rawData:
     | unknown[]
@@ -383,15 +396,14 @@ export function castDataVarToFloat32(
     | zarr.ByteStringArray
     | zarr.Chunk<zarr.DataType>
 ) {
-  if (
-    rawData instanceof Float64Array ||
-    rawData instanceof Int32Array ||
-    rawData instanceof Int16Array ||
-    rawData instanceof Int8Array ||
-    rawData instanceof Uint16Array ||
-    rawData instanceof Uint8Array
-  ) {
+  if (rawData instanceof Float32Array) {
+    return rawData;
+  }
+  if (isFloat32ConvertibleArray(rawData)) {
     return Float32Array.from(rawData);
   }
-  return rawData as Float32Array;
+  if (Array.isArray(rawData)) {
+    return Float32Array.from(rawData);
+  }
+  throw new TypeError("Unsupported data type for Float32 texture conversion");
 }

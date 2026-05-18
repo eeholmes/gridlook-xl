@@ -224,11 +224,8 @@ function prepareDefaults(src: string, index: TSources) {
     const varinfo = modelInfo.value!.vars[varname];
     return !varinfo.hidden;
   });
-  const preferredVar = paramVarname.value ?? modelInfo.value!.defaultVar;
   varnameSelector.value =
-    preferredVar && validVars.includes(preferredVar)
-      ? preferredVar
-      : validVars[0];
+    paramVarname.value ?? modelInfo.value!.defaultVar ?? validVars[0];
 
   if (
     datasources.value &&
