@@ -165,7 +165,7 @@ async function collectVariablesFromNodeList(
         });
         searchDimensionsAndCoordinates(dimensions, variable);
 
-        const varname = node.path.slice(1);
+        const varname = node.path.replace(/^\//, "");
         return {
           [varname]: {
             store: src,
@@ -237,7 +237,7 @@ async function indexFromIcechunkFallback(
   if (!isNodeListedStore(store)) {
     throw new AggregateError(
       [v2Error, v3Error],
-      `Failed to open Zarr source at ${src}`
+      `Failed to open source at ${src} as Zarr v2, Zarr v3, or Icechunk`
     );
   }
   const root = await zarr.open(zarr.root(store), { kind: "group" });
