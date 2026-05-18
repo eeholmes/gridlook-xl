@@ -6,7 +6,9 @@ This project is a Vue 3 + TypeScript + Vite application for exploring Earth
 system model output on native grids in the browser. The notes below are meant
 to keep contributions aligned with the current tooling and release workflow.
 
-## Development Setup
+## Local Development and Testing Setup
+
+This project uses [Node.js](https://nodejs.org/en) and [vue.js](https://vuejs.org/).
 
 ### Prerequisites
 
@@ -16,7 +18,14 @@ to keep contributions aligned with the current tooling and release workflow.
 CI currently runs on newer Node versions as well, so using a recent LTS release
 locally is a good default.
 
+### Step 1
+
+* Clone the repo and cd to the repo dir
+* Install Node.js (`npm`) if needed. [Here](https://nodejs.org/en) or google for your OS.
+
 ### Install dependencies
+
+This will install all the dependencies in `package.json`.
 
 ```sh
 npm install
