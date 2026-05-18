@@ -95,6 +95,11 @@ function searchDimensionsAndCoordinates(
   }
 }
 
+function isUnsupportedDataTypeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Unknown or unsupported dataType");
+}
+
 async function collectVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
@@ -355,8 +360,10 @@ async function enrichMetadata(
           ...variable.attrs,
           dimensionNames: arrayDimensions,
         } as Record<string, unknown>;
-      } catch {
-        // ignore
+      } catch (error) {
+        if (isUnsupportedDataTypeError(error)) {
+          delete datasources[varname];
+        }
       }
     }
   }
