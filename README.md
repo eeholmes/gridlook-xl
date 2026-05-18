@@ -1,4 +1,4 @@
-# gridlook
+# gridlook with IceChunk
 
 This is a fork of [GridLook](https://github.com/d70-t/gridlook). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. You can view any **CORS-enabled**, public Zarr dataset with GridLook. I have modified it to support Zarr v3 (better), Icechunk stores, and some number formating that it didn't support out of box. I also added a GitHub Action to serve the gridlook viewer on GitHub Pages.
 
