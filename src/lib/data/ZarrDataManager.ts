@@ -1,3 +1,4 @@
+import { IcechunkStore } from "icechunk-js";
 import QuickLRU from "quick-lru";
 import * as zarr from "zarrita";
 
@@ -21,6 +22,7 @@ export type TZarrVariableMetadata = {
 
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
 export class ZarrDataManager {
+  private static readonly ICECHUNK_PREFIX = "icechunk+";
   private static pendingStore: Promise<
     zarr.Location<zarr.AsyncReadable>
   > | null = null;
@@ -30,16 +32,49 @@ export class ZarrDataManager {
     return store.replace(/\/+$/, "");
   }
 
+  private static parseStorePath(storePath: string): {
+    backend: "fetch" | "icechunk";
+    url: string;
+  } {
+    if (storePath.startsWith(this.ICECHUNK_PREFIX)) {
+      return {
+        backend: "icechunk",
+        url: storePath.slice(this.ICECHUNK_PREFIX.length),
+      };
+    }
+    return { backend: "fetch", url: storePath };
+  }
+
+  static toIcechunkStorePath(storeUrl: string) {
+    return storeUrl.startsWith(this.ICECHUNK_PREFIX)
+      ? storeUrl
+      : `${this.ICECHUNK_PREFIX}${storeUrl}`;
+  }
+
   private static normalizeDatasetPath(dataset: string) {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }
 
   public static async createNewStore(storePath: string) {
+    const parsed = this.parseStorePath(storePath);
+    if (parsed.backend === "icechunk") {
+      try {
+        return await IcechunkStore.open(parsed.url, {
+          withRangeCoalescing: zarr.withRangeCoalescing,
+        });
+      } catch (error) {
+        throw new Error(
+          `Failed to open icechunk store from ${storePath} (resolved URL: ${parsed.url})`,
+          { cause: error }
+        );
+      }
+    }
+
     const cache = new QuickLRU<string, Uint8Array | undefined>({
       maxSize: 512,
     });
     const fetchStore = zarr.extendStore(
-      new zarr.FetchStore(storePath, { useSuffixRequest: true }),
+      new zarr.FetchStore(parsed.url, { useSuffixRequest: true }),
       (s) => zarr.withRangeCoalescing(s, { coalesceSize: 32768 }),
       (s) => zarr.withByteCaching(s, { cache: cache })
     );

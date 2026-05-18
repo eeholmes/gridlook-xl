@@ -41,6 +41,7 @@
     "dayjs": "^1.11.20",
     "fflate": "^0.8.2",
     "humanize-duration": "^3.33.2",
+    "icechunk-js": "^0.4.0",
     "lodash.debounce": "4.0.8",
     "pinia": "^3.0.4",
     "primevue": "^4.5.5",

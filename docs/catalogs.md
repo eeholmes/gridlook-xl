@@ -19,6 +19,13 @@ Each dataset entry currently supports:
 - `tag`: optional short label shown in the catalog list
 - `description`: optional longer text used in the catalog list and search
 
+`url` can be either:
+
+- a regular Zarr URL (existing behavior),
+- a direct Icechunk repository URL, or
+- an Icechunk URL prefixed with `icechunk+` for explicit backend selection,
+  for example: `icechunk+https://bucket.s3.amazonaws.com/my-icechunk-repo`
+
 Example:
 
 ```json
