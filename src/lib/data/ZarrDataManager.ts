@@ -56,6 +56,47 @@ export class ZarrDataManager {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }
 
+  private static isAbortError(error: unknown) {
+    return error instanceof Error && error.name === "AbortError";
+  }
+
+  private static async getRangeWithFullFallback(
+    baseUrl: string,
+    storage: HttpStorage,
+    fullObjectCache: QuickLRU<string, Uint8Array>,
+    path: string,
+    range: ByteRange,
+    options: RequestOptions | undefined,
+    rangeError: unknown
+  ) {
+    const cached = fullObjectCache.get(path);
+    if (cached && cached.length >= range.end) {
+      return cached.slice(range.start, range.end);
+    }
+
+    let data: Uint8Array;
+    try {
+      data = await storage.getObject(path, undefined, options);
+      fullObjectCache.set(path, data);
+    } catch (fallbackError) {
+      if (
+        fallbackError instanceof NotFoundError ||
+        this.isAbortError(fallbackError)
+      ) {
+        throw fallbackError;
+      }
+      throw new AggregateError(
+        [rangeError, fallbackError],
+        `Failed range request and full-object fallback for ${baseUrl}/${path.replace(/^\/+/, "")}`
+      );
+    }
+
+    if (data.length >= range.end) {
+      return data.slice(range.start, range.end);
+    }
+    throw rangeError;
+  }
+
   private static createRangeFallbackStorage(baseUrl: string): Storage {
     const storage = new HttpStorage(baseUrl);
     const fullObjectCache = new QuickLRU<string, Uint8Array>({ maxSize: 32 });
@@ -71,29 +112,21 @@ export class ZarrDataManager {
         try {
           return await storage.getObject(path, range, options);
         } catch (error) {
-          if (error instanceof NotFoundError) {
+          if (
+            error instanceof NotFoundError ||
+            ZarrDataManager.isAbortError(error)
+          ) {
             throw error;
           }
-          const cached = fullObjectCache.get(path);
-          if (cached && cached.length >= range.end) {
-            return cached.slice(range.start, range.end);
-          }
-
-          let data: Uint8Array;
-          try {
-            data = await storage.getObject(path, undefined, options);
-            fullObjectCache.set(path, data);
-          } catch (fallbackError) {
-            throw new AggregateError(
-              [error, fallbackError],
-              `Failed range request and full-object fallback for ${baseUrl}/${path.replace(/^\/+/, "")}`
-            );
-          }
-
-          if (data.length >= range.end) {
-            return data.slice(range.start, range.end);
-          }
-          throw error;
+          return await ZarrDataManager.getRangeWithFullFallback(
+            baseUrl,
+            storage,
+            fullObjectCache,
+            path,
+            range,
+            options,
+            error
+          );
         }
       },
       async exists(path: string, options?: RequestOptions) {
