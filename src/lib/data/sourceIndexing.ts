@@ -237,7 +237,7 @@ async function indexFromIcechunkFallback(
   if (!isNodeListedStore(store)) {
     throw new AggregateError(
       [v2Error, v3Error],
-      `Failed to open source at ${src} as Zarr v2, Zarr v3, or Icechunk (${icechunkStorePath})`
+      `Failed to open source at ${src} as Zarr v2 or Zarr v3, and Icechunk fallback was unavailable for ${icechunkStorePath}`
     );
   }
   const root = await zarr.open(zarr.root(store), { kind: "group" });
