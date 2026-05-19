@@ -13,6 +13,7 @@ import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
+  applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
   mapMissingAndFillToNaN,
@@ -40,6 +41,7 @@ const { logError } = useLog();
 const {
   dimSlidersValues,
   varnameSelector,
+  transformMode,
   colormap,
   invertColormap,
   posterizeLevels,
@@ -82,6 +84,13 @@ const { setHoverLookupFromIndex, clearHoverLookup } =
 
 watch(
   () => varnameSelector.value,
+  () => {
+    getData();
+  }
+);
+
+watch(
+  () => transformMode.value,
   () => {
     getData();
   }
@@ -352,11 +361,10 @@ function data2valueBuffer(
   const ncells = awaitedData.shape[0];
   const plotdata = castDataVarToFloat32(awaitedData.data);
 
-  const { min, max, missingValue, fillValue } = getDataBounds(
-    datavar,
-    plotdata
-  );
+  const { missingValue, fillValue } = getDataBounds(datavar, plotdata);
   mapMissingAndFillToNaN(plotdata, missingValue, fillValue);
+  applyDisplayTransformToData(plotdata, transformMode.value);
+  const { min, max } = getDataBounds(datavar, plotdata);
   const dataValues = new Float32Array(ncells * 3);
 
   for (let i = 0; i < ncells; i++) {

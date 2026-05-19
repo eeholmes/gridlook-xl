@@ -10,7 +10,12 @@ import {
   type TProjectionType,
 } from "@/lib/projection/projectionUtils.ts";
 import type { TColorMap } from "@/lib/shaders/colormapShaders.ts";
-import type { TVarInfo, TBounds } from "@/lib/types/GlobeTypes.ts";
+import {
+  VALUE_TRANSFORMS,
+  type TVarInfo,
+  type TBounds,
+  type TValueTransform,
+} from "@/lib/types/GlobeTypes.ts";
 import type { TCatalog } from "@/utils/catalog.ts";
 
 export const UPDATE_MODE = {
@@ -54,6 +59,7 @@ export const useGlobeControlStore = defineStore("globeControl", {
       histogram: undefined as number[] | undefined, // selection-range histogram bins
       fullHistogram: undefined as number[] | undefined, // fixed histogram over full data range
       colormap: "turbo" as TColorMap,
+      transformMode: VALUE_TRANSFORMS.LINEAR as TValueTransform,
       invertColormap: true,
       posterizeLevels: 0 as number,
       hideLowerBound: false,

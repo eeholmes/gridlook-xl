@@ -128,6 +128,11 @@ export const projectionShaderFunctions = `
     return clamp(blend + rimBlend * rimWeight + farBlend * farWeight, 0.0, 1.0);
   }
 
+  float makeNaN() {
+    // Use a quiet-NaN bit pattern to avoid driver-dependent behavior from sqrt(-1.0).
+    return uintBitsToFloat(0x7FC00000u);
+  }
+
   // Globe projection (3D sphere)
   vec3 projectGlobe(float lat, float lon, float radius) {
     float latRad = lat * DEG_TO_RAD;
@@ -247,7 +252,7 @@ export const projectionShaderFunctions = `
     float c = acos(cosC);
 
     if (c > AZIMUTHAL_CLIP_ANGLE_RAD) {
-      float nan = sqrt(-1.0);
+      float nan = makeNaN();
       return vec3(nan, nan, nan);
     }
 
@@ -257,7 +262,7 @@ export const projectionShaderFunctions = `
 
     float sinC = sin(c);
     if (abs(sinC) < 0.0001) {
-      float nan = sqrt(-1.0);
+      float nan = makeNaN();
       return vec3(nan, nan, nan);
     }
 
@@ -289,7 +294,7 @@ export const projectionShaderFunctions = `
     // Clip points beyond the configured clip angle to avoid antipodal singularity
     // Return NaN to cause GPU to discard the geometry entirely
     if (c > AZIMUTHAL_CLIP_ANGLE_RAD) {
-      float nan = sqrt(-1.0);  // Generate NaN
+      float nan = makeNaN();
       return vec3(nan, nan, nan);
     }
 

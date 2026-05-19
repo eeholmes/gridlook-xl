@@ -18,6 +18,14 @@ export type TSelection = {
   bounds: TBounds;
 };
 
+export const VALUE_TRANSFORMS = {
+  LINEAR: "linear",
+  LOG10: "log10",
+} as const;
+
+export type TValueTransform =
+  (typeof VALUE_TRANSFORMS)[keyof typeof VALUE_TRANSFORMS];
+
 export type TDimensionRange = {
   name: string;
   startPos: number;
