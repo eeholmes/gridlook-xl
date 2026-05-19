@@ -13,6 +13,7 @@ import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
+  applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
   isLatitudeName,
@@ -44,6 +45,7 @@ const { logError } = useLog();
 const {
   dimSlidersValues,
   colormap,
+  transformMode,
   varnameSelector,
   invertColormap,
   posterizeLevels,
@@ -89,6 +91,13 @@ const BATCH_SIZE = 60;
 let meshes: THREE.Mesh[] = [];
 watch(
   () => varnameSelector.value,
+  () => {
+    getData();
+  }
+);
+
+watch(
+  () => transformMode.value,
   () => {
     getData();
   }
@@ -639,8 +648,10 @@ async function fetchAndRenderData(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
 
-  const { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
+  const { missingValue, fillValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
+  rawData = applyDisplayTransformToData(rawData, transformMode.value);
+  const { min, max } = getDataBounds(datavar, rawData);
 
   const material = makeMaterial(rawData);
 

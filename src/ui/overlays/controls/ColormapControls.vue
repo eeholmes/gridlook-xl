@@ -7,7 +7,11 @@ import ColorBar from "./ColorBar.vue";
 import { roundToDataPrecision } from "./colorbarUtils.ts";
 
 import type { TColorMap } from "@/lib/shaders/colormapShaders.ts";
-import type { TBounds, TModelInfo } from "@/lib/types/GlobeTypes.ts";
+import {
+  VALUE_TRANSFORMS,
+  type TBounds,
+  type TModelInfo,
+} from "@/lib/types/GlobeTypes.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
 
 const props = defineProps<{
@@ -23,6 +27,7 @@ const emit = defineEmits<{
 const store = useGlobeControlStore();
 const {
   colormap,
+  transformMode,
   invertColormap,
   posterizeLevels,
   hideLowerBound,
@@ -126,6 +131,34 @@ function handleOptionHover(option: TColorMap) {
       @update:bounds-low="handleBoundsLowUpdate"
       @update:bounds-high="handleBoundsHighUpdate"
     />
+
+    <div class="columns is-mobile is-vcentered compact-row px-1 mt-2">
+      <div class="column is-narrow">
+        <span class="label is-small mb-0">Transform</span>
+      </div>
+      <div class="column is-narrow">
+        <label class="radio">
+          <input
+            v-model="transformMode"
+            :value="VALUE_TRANSFORMS.LINEAR"
+            type="radio"
+            name="transform_mode"
+          />
+          Linear
+        </label>
+      </div>
+      <div class="column is-narrow">
+        <label class="radio">
+          <input
+            v-model="transformMode"
+            :value="VALUE_TRANSFORMS.LOG10"
+            type="radio"
+            name="transform_mode"
+          />
+          Log10
+        </label>
+      </div>
+    </div>
 
     <!-- Posterize control -->
     <div class="columns is-mobile is-vcentered compact-row mt-2 mb-4 px-1">

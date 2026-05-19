@@ -13,6 +13,7 @@ import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
+  applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
@@ -42,6 +43,7 @@ const { logError } = useLog();
 const {
   dimSlidersValues,
   colormap,
+  transformMode,
   varnameSelector,
   invertColormap,
   posterizeLevels,
@@ -83,6 +85,13 @@ const { setHoverLookupFromIndex, clearHoverLookup } =
 
 watch(
   () => varnameSelector.value,
+  () => {
+    getData();
+  }
+);
+
+watch(
+  () => transformMode.value,
   () => {
     getData();
   }
@@ -454,8 +463,10 @@ async function fetchAndRenderData(
   const latitudesData = latitudes.data as Float64Array;
   const longitudesData = longitudes!.data as Float64Array;
 
-  let { min, max, missingValue, fillValue } = getDataBounds(datavar, rawData);
+  let { missingValue, fillValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
+  rawData = applyDisplayTransformToData(rawData, transformMode.value);
+  const { min, max } = getDataBounds(datavar, rawData);
 
   buildGaussianReducedGeometry(latitudesData, longitudesData, rawData);
 

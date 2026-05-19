@@ -15,6 +15,7 @@ import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts"
 import { reconcileCoordinates } from "@/lib/data/irregularGridHelpers.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
+  applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
@@ -46,6 +47,7 @@ const { logError } = useLog();
 const {
   dimSlidersValues,
   colormap,
+  transformMode,
   varnameSelector,
   invertColormap,
   posterizeLevels,
@@ -96,6 +98,13 @@ watch(
   () => {
     // Clear triangulation cache when variable changes (coordinates may differ)
     cachedTriangleIndices = null;
+    getData();
+  }
+);
+
+watch(
+  () => transformMode.value,
+  () => {
     getData();
   }
 );
@@ -733,8 +742,10 @@ async function fetchAndRenderData(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
 
-  let { min, max, fillValue, missingValue } = getDataBounds(datavar, rawData);
+  let { fillValue, missingValue } = getDataBounds(datavar, rawData);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
+  rawData = applyDisplayTransformToData(rawData, transformMode.value);
+  const { min, max } = getDataBounds(datavar, rawData);
   getGrid(latitudes, longitudes!, rawData);
 
   updateHoverLookup(rawData, latitudes, longitudes!, fillValue, missingValue);

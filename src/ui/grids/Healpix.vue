@@ -14,6 +14,7 @@ import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
 import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
+  applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
   mapMissingAndFillToNaN,
@@ -51,6 +52,7 @@ const { logError } = useLog();
 const {
   varnameSelector,
   colormap,
+  transformMode,
   invertColormap,
   posterizeLevels,
   selection,
@@ -102,6 +104,13 @@ let mainMeshes: THREE.Mesh<
 
 watch(
   () => varnameSelector.value,
+  () => {
+    getData();
+  }
+);
+
+watch(
+  () => transformMode.value,
   () => {
     getData();
   }
@@ -345,6 +354,17 @@ async function fillHealpixChunkData(
   }
 }
 
+function normalizeHealpixMissingAndFill(
+  missingValue: number,
+  fillValue: number
+) {
+  // HEALPix uses HEALPIX_UNSEEN when metadata does not provide fill/missing.
+  return {
+    missingValue: isNaN(missingValue) ? HEALPIX_UNSEEN : missingValue,
+    fillValue: isNaN(fillValue) ? HEALPIX_UNSEEN : fillValue,
+  };
+}
+
 async function getHealpixData(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   cellCoord: number[] | undefined, // Optional - undefined for global data
@@ -370,14 +390,14 @@ async function getHealpixData(
     dataSlice
   );
 
-  let { min, max, missingValue, fillValue } = getDataBounds(datavar, dataSlice);
-  if (isNaN(missingValue)) {
-    missingValue = HEALPIX_UNSEEN;
-  } else if (isNaN(fillValue)) {
-    fillValue = HEALPIX_UNSEEN;
-  }
+  const rawBounds = getDataBounds(datavar, dataSlice);
+  const { missingValue, fillValue } = normalizeHealpixMissingAndFill(
+    rawBounds.missingValue,
+    rawBounds.fillValue
+  );
   mapMissingAndFillToNaN(dataSlice, missingValue, fillValue);
-  ({ min, max } = getDataBounds(datavar, dataSlice));
+  applyDisplayTransformToData(dataSlice, transformMode.value);
+  const { min, max } = getDataBounds(datavar, dataSlice);
 
   // Filter out missing and fill values before building histogram
   return {
@@ -658,8 +678,12 @@ async function processHealpixChunks(
       }
 
       histogramSummaries.push(texData.histogramSummary);
-      dataMin = dataMin > texData.min ? texData.min : dataMin;
-      dataMax = dataMax < texData.max ? texData.max : dataMax;
+      if (Number.isFinite(texData.min) && texData.min < dataMin) {
+        dataMin = texData.min;
+      }
+      if (Number.isFinite(texData.max) && texData.max > dataMax) {
+        dataMax = texData.max;
+      }
 
       const material = mainMeshes[ipix].material as THREE.ShaderMaterial;
       material.uniforms.data.value.dispose();
@@ -668,6 +692,13 @@ async function processHealpixChunks(
       redraw();
     })
   );
+
+  if (!Number.isFinite(dataMin)) {
+    dataMin = Number.NaN;
+  }
+  if (!Number.isFinite(dataMax)) {
+    dataMax = Number.NaN;
+  }
 
   return { dataMin, dataMax, histogramSummaries };
 }
@@ -723,20 +754,19 @@ async function fetchAndRenderData(
     datavar,
     updateMode
   );
-
   const cellCoord = await getCells();
   const nside = await getNside();
   hoverNside.value = nside;
   hoverData.value = castDataVarToFloat32(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
-  let { missingValue, fillValue } = getDataBounds(datavar, hoverData.value);
-  if (isNaN(missingValue)) {
-    missingValue = HEALPIX_UNSEEN;
-  } else if (isNaN(fillValue)) {
-    fillValue = HEALPIX_UNSEEN;
-  }
+  const rawBounds = getDataBounds(datavar, hoverData.value);
+  const { missingValue, fillValue } = normalizeHealpixMissingAndFill(
+    rawBounds.missingValue,
+    rawBounds.fillValue
+  );
   mapMissingAndFillToNaN(hoverData.value, missingValue, fillValue);
+  applyDisplayTransformToData(hoverData.value, transformMode.value);
   if (cellCoord) {
     const cellIndexMap = new Map<number, number>();
     for (let index = 0; index < cellCoord.length; index++) {
@@ -753,11 +783,8 @@ async function fetchAndRenderData(
     nside,
     indices
   );
-
   updateHistogram(histogramSummaries, dataMin, dataMax);
-
   const dimInfo = await getDimensionValues(dimensionRanges, indices);
-
   store.updateVarInfo(
     {
       attrs: datavar.attrs,

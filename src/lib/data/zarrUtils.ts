@@ -2,7 +2,11 @@ import * as zarr from "zarrita";
 
 import { ZarrDataManager } from "./ZarrDataManager.ts";
 
-import { type TSources } from "@/lib/types/GlobeTypes.ts";
+import {
+  VALUE_TRANSFORMS,
+  type TSources,
+  type TValueTransform,
+} from "@/lib/types/GlobeTypes.ts";
 
 export function getMissingValue(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
@@ -359,6 +363,24 @@ export function mapMissingAndFillToNaN(
       data[i] = NaN;
     }
   }
+  return data;
+}
+
+export function applyDisplayTransformToData(
+  data: Float32Array<ArrayBufferLike>,
+  transformMode: TValueTransform
+) {
+  if (transformMode === VALUE_TRANSFORMS.LINEAR) {
+    return data;
+  }
+
+  for (let i = 0; i < data.length; i++) {
+    const value = data[i];
+    // Logarithmic display mode: zero/negative/non-finite values are invalid.
+    data[i] =
+      Number.isFinite(value) && value > 0 ? Math.log10(value) : Number.NaN;
+  }
+
   return data;
 }
 
