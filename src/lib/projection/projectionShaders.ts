@@ -129,6 +129,7 @@ export const projectionShaderFunctions = `
   }
 
   float makeNaN() {
+    // Use a quiet-NaN bit pattern to avoid driver-dependent behavior from sqrt(-1.0).
     return uintBitsToFloat(0x7FC00000u);
   }
 
