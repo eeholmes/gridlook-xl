@@ -59,6 +59,9 @@ export class ZarrDataManager {
    *
    * Example: "icechunk+https://host/store/group1/group2"
    *   → { storePath: "icechunk+https://host/store", groupPath: "group1/group2" }
+   *
+   * Note: in the worst case this makes one HTTP request per path segment before
+   * it finds the store root, so it is intentionally used only as a fallback.
    */
   static async splitIcechunkStoreAndGroup(
     src: string

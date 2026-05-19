@@ -155,15 +155,23 @@ async function collectVariablesFromNodeList(
   candidates: PromiseSettledResult<Record<string, TDataSource>>[];
   dimensions: Set<string>;
 }> {
-  // When a group path is given, only include arrays that live inside that group.
-  const groupPrefix = groupPath ? `/${groupPath}/` : null;
+  // When a group path is given, only include arrays that live at or inside
+  // that group.  The two clauses handle:
+  //   • exact match  – the array IS the group path (rare but valid)
+  //   • prefix match – the array lives somewhere inside the group
+  const groupAbsPath = groupPath ? `/${groupPath}` : null;
 
   const dimensions = new Set<string>();
   const candidates = await Promise.allSettled(
     store
       .listNodes()
       .filter((node) => node.nodeData?.type === "array")
-      .filter((node) => !groupPrefix || node.path.startsWith(groupPrefix))
+      .filter(
+        (node) =>
+          !groupAbsPath ||
+          node.path === groupAbsPath ||
+          node.path.startsWith(`${groupAbsPath}/`)
+      )
       .map(async (node) => {
         const variable = await zarr.open(root.resolve(node.path), {
           kind: "array",
@@ -172,11 +180,11 @@ async function collectVariablesFromNodeList(
 
         // When a groupPath is set, expose only the variable's name relative
         // to that group so the UI shows clean, short names.
-        const fullVarname = node.path.replace(/^\//, "");
+        const absPath = node.path; // e.g. "/group1/group2/varname"
         const varname =
-          groupPath && fullVarname.startsWith(`${groupPath}/`)
-            ? fullVarname.slice(groupPath.length + 1)
-            : fullVarname;
+          groupAbsPath && absPath.startsWith(`${groupAbsPath}/`)
+            ? absPath.slice(groupAbsPath.length + 1)
+            : absPath.replace(/^\//, "");
 
         return {
           [varname]: {
