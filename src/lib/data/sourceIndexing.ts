@@ -149,27 +149,39 @@ async function collectVariables(
 async function collectVariablesFromNodeList(
   store: TNodeListedStore,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string
+  src: string,
+  groupPath: string = ""
 ): Promise<{
   candidates: PromiseSettledResult<Record<string, TDataSource>>[];
   dimensions: Set<string>;
 }> {
+  // When a group path is given, only include arrays that live inside that group.
+  const groupPrefix = groupPath ? `/${groupPath}/` : null;
+
   const dimensions = new Set<string>();
   const candidates = await Promise.allSettled(
     store
       .listNodes()
       .filter((node) => node.nodeData?.type === "array")
+      .filter((node) => !groupPrefix || node.path.startsWith(groupPrefix))
       .map(async (node) => {
         const variable = await zarr.open(root.resolve(node.path), {
           kind: "array",
         });
         searchDimensionsAndCoordinates(dimensions, variable);
 
-        const varname = node.path.replace(/^\//, "");
+        // When a groupPath is set, expose only the variable's name relative
+        // to that group so the UI shows clean, short names.
+        const fullVarname = node.path.replace(/^\//, "");
+        const varname =
+          groupPath && fullVarname.startsWith(`${groupPath}/`)
+            ? fullVarname.slice(groupPath.length + 1)
+            : fullVarname;
+
         return {
           [varname]: {
             store: src,
-            dataset: "",
+            dataset: groupPath,
             hidden: !isValidVariable(
               varname,
               variable.shape,
@@ -217,12 +229,14 @@ async function processZarrVariables(
 async function processNodeListedVariables(
   store: TNodeListedStore,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string
+  src: string,
+  groupPath: string = ""
 ): Promise<Record<string, TDataSource>> {
   const { candidates, dimensions } = await collectVariablesFromNodeList(
     store,
     root,
-    src
+    src,
+    groupPath
   );
   return mergeDatasourceCandidates(candidates, dimensions);
 }
@@ -232,9 +246,16 @@ async function indexFromIcechunkFallback(
   v2Error: unknown,
   v3Error: unknown
 ): Promise<TSources> {
-  const icechunkStorePath = ZarrDataManager.toIcechunkStorePath(src);
-  const store = await ZarrDataManager.createNewStore(icechunkStorePath);
-  if (!isNodeListedStore(store)) {
+  // Find the actual Icechunk store root – if `src` already points to the root
+  // this is a single attempt; if it embeds a nested-group path the function
+  // probes progressively shorter prefixes to discover the real store URL.
+  const { storePath: icechunkStorePath, groupPath } =
+    await ZarrDataManager.splitIcechunkStoreAndGroup(src);
+
+  const store = await ZarrDataManager.createNewStore(icechunkStorePath).catch(
+    () => null
+  );
+  if (!store || !isNodeListedStore(store)) {
     throw new AggregateError(
       [v2Error, v3Error],
       `Failed to open source at ${src} as Zarr v2 or Zarr v3, and Icechunk fallback was unavailable for ${icechunkStorePath}`
@@ -244,7 +265,8 @@ async function indexFromIcechunkFallback(
   const datasources = await processNodeListedVariables(
     store,
     root,
-    icechunkStorePath
+    icechunkStorePath,
+    groupPath
   );
   return createIndex(
     root.attrs?.title as string,
