@@ -228,7 +228,7 @@ export class ZarrDataManager {
     throw new Error(
       `Failed to resolve variable "${variable}" in dataset "${datasetPath}" for store "${storePath}"`,
       {
-        cause: lastResolutionError ?? undefined,
+        cause: lastResolutionError || undefined,
       }
     );
   }
