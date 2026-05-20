@@ -147,7 +147,12 @@ async function collectVariables(
 }
 
 function getParentDatasetPath(absPath: string): string {
-  return absPath.replace(/^\/+/, "").split("/").slice(0, -1).join("/");
+  const normalizedAbsPath = absPath.replace(/^\/+/, "");
+  // Root-level arrays (e.g. "/varname") intentionally map to the root dataset.
+  if (!normalizedAbsPath.includes("/")) {
+    return "";
+  }
+  return normalizedAbsPath.split("/").slice(0, -1).join("/");
 }
 
 function isNodeWithinGroup(nodePath: string, groupAbsPath: string | null) {

@@ -200,6 +200,8 @@ export class ZarrDataManager {
     let varPath = variablePath;
     if (storePath.startsWith(this.ICECHUNK_PREFIX) && datasetPath) {
       const datasetPrefix = `${datasetPath}/`;
+      // Root-indexed grouped datasets may already include the dataset prefix
+      // in the variable key (e.g. "spatial/blh"), so avoid double-prefixing.
       varPath = variablePath.startsWith(datasetPrefix)
         ? variablePath
         : `${datasetPrefix}${variablePath}`;
