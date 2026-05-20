@@ -458,7 +458,8 @@ async function fetchAndRenderData(
 
   const { latitudes, longitudes } = await getLatLonData(
     datavar,
-    props.datasources
+    props.datasources,
+    varnameSelector.value
   );
   const latitudesData = latitudes.data as Float64Array;
   const longitudesData = longitudes!.data as Float64Array;

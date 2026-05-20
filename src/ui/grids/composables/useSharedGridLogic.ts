@@ -196,6 +196,7 @@ export function useSharedGridLogic() {
       if (dim?.name === "time") {
         const timeInfo = await getTimeInfo(
           datasources,
+          currentVariable,
           dimensionRanges,
           i,
           dimSlidersValues[i] as number

@@ -21,6 +21,12 @@ export type TZarrVariableMetadata = {
 };
 
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
+
+export type TResolvedVariableReference = {
+  datasource: TDatasetSource;
+  variable: string;
+};
+
 export class ZarrDataManager {
   private static readonly ICECHUNK_PREFIX = "icechunk+";
   private static pendingStore: Promise<
@@ -107,6 +113,10 @@ export class ZarrDataManager {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }
 
+  private static normalizeVariablePath(variable: string) {
+    return variable.replace(/^\/+/, "").replace(/\/+$/, "");
+  }
+
   public static async createNewStore(storePath: string) {
     const parsed = this.parseStorePath(storePath);
     if (parsed.backend === "icechunk") {
@@ -189,15 +199,44 @@ export class ZarrDataManager {
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const storePath = this.normalizeStorePath(datasource.store);
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
+    const variablePath = this.normalizeVariablePath(variable);
     const group = await this.getDataset(datasource);
+    if (!storePath.startsWith(this.ICECHUNK_PREFIX) || !datasetPath) {
+      return await this.getVariable(group, variablePath);
+    }
+
     // For Icechunk stores getDataset returns the root group, so compose the
-    // full path from the dataset (group) path and the variable name.
-    const varPath =
-      storePath.startsWith(this.ICECHUNK_PREFIX) && datasetPath
-        ? `${datasetPath}/${variable}`
-        : variable;
-    const array = await this.getVariable(group, varPath);
-    return array;
+    // full path from the dataset path and variable name. Root indexing may
+    // provide either "blh" or "spatial/blh", so try both forms.
+    const datasetPrefix = `${datasetPath}/`;
+    const prefixedPath = variablePath.startsWith(datasetPrefix)
+      ? variablePath
+      : `${datasetPrefix}${variablePath}`;
+    const unprefixedPath = variablePath.startsWith(datasetPrefix)
+      ? variablePath.slice(datasetPrefix.length)
+      : variablePath;
+
+    const triedPaths = new Set<string>();
+    let lastResolutionError: unknown = null;
+    for (const candidatePath of [prefixedPath, unprefixedPath, variablePath]) {
+      if (triedPaths.has(candidatePath) || candidatePath.length === 0) {
+        continue;
+      }
+      triedPaths.add(candidatePath);
+      try {
+        return await this.getVariable(group, candidatePath);
+      } catch (error) {
+        lastResolutionError = error;
+        // Try the next candidate path.
+      }
+    }
+
+    throw new Error(
+      `Failed to resolve variable "${variable}" in dataset "${datasetPath}" for store "${storePath}"`,
+      {
+        cause: lastResolutionError || undefined,
+      }
+    );
   }
 
   static async getVariableInfoByDatasetSources(
@@ -238,8 +277,12 @@ export class ZarrDataManager {
     variable: string
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const crsVar = await this.findCRSVar(datasource, variable);
-    const variableSource = this.getDatasetSource(datasource, variable);
-    return await this.getVariableInfo(variableSource, crsVar);
+    const resolved = this.resolveVariableReference(
+      datasource,
+      variable,
+      crsVar
+    );
+    return await this.getVariableInfo(resolved.datasource, resolved.variable);
   }
 
   static async findCRSVar(datasources: TSources, varname: string) {
@@ -260,6 +303,56 @@ export class ZarrDataManager {
     varname: string
   ): TDatasetSource {
     return datasources.levels[0].datasources[varname];
+  }
+
+  static resolveVariableReference(
+    datasources: TSources,
+    currentVarname: string,
+    targetVarname: string
+  ): TResolvedVariableReference {
+    const levelDatasources = datasources.levels[0].datasources;
+    const normalizedTarget = this.normalizeVariablePath(targetVarname);
+    const directMatch = levelDatasources[normalizedTarget];
+    if (directMatch) {
+      return {
+        datasource: directMatch,
+        variable: normalizedTarget,
+      };
+    }
+
+    const currentSource = this.getDatasetSource(datasources, currentVarname);
+    const currentDataset = this.normalizeDatasetPath(currentSource.dataset);
+    const datasetQualifiedTarget = currentDataset
+      ? `${currentDataset}/${normalizedTarget}`
+      : normalizedTarget;
+    const datasetQualifiedMatch = levelDatasources[datasetQualifiedTarget];
+    if (datasetQualifiedMatch) {
+      return {
+        datasource: datasetQualifiedMatch,
+        variable: datasetQualifiedTarget,
+      };
+    }
+
+    const targetLeafName =
+      normalizedTarget.split("/").pop() ?? normalizedTarget;
+    const sameDatasetMatch = Object.entries(levelDatasources).find(
+      ([varname, source]) =>
+        (this.normalizeVariablePath(varname).split("/").pop() ?? varname) ===
+          targetLeafName &&
+        this.normalizeDatasetPath(source.dataset) === currentDataset
+    );
+    if (sameDatasetMatch) {
+      const [matchedVarname, matchedSource] = sameDatasetMatch;
+      return {
+        datasource: matchedSource,
+        variable: matchedVarname,
+      };
+    }
+
+    return {
+      datasource: currentSource,
+      variable: normalizedTarget,
+    };
   }
 
   static async getDimensionNames(datasources: TSources, varname: string) {

@@ -162,8 +162,15 @@ async function getTimeDimensionInfo() {
   const timeDimName = arrayDims[timeDimIndex];
 
   try {
-    const varSource = props.datasources.levels[0].time;
-    timeInfo.value = await fetchTimeData(varSource, timeDimName);
+    const timeReference = ZarrDataManager.resolveVariableReference(
+      props.datasources,
+      varnameSelector.value || "",
+      timeDimName
+    );
+    timeInfo.value = await fetchTimeData(
+      timeReference.datasource,
+      timeReference.variable
+    );
   } catch (err) {
     logError(err);
     timeInfo.value = null;
@@ -226,6 +233,7 @@ async function getLatLonInfo(
       await getLatLonData(
         variable,
         props.datasources,
+        varnameSelector.value || "",
         props.gridType === GRID_TYPES.REGULAR_ROTATED
       );
 
