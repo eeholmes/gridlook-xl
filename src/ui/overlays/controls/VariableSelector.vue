@@ -33,7 +33,7 @@ const maxGroupDepth = computed(() =>
   }, 0)
 );
 
-const selectedGroupSegments = ref<string[]>([]);
+const selectedGroupSegments = ref<Array<string | null>>([]);
 
 function getGroupOptions(level: number) {
   const options = new Set<string>();
@@ -58,8 +58,9 @@ watch(
     const next = selectedGroupSegments.value.slice(0, maxGroupDepth.value);
     for (let i = 0; i < maxGroupDepth.value; i++) {
       const options = getGroupOptions(i);
-      if (!options.includes(next[i] ?? "")) {
-        next[i] = options[0] ?? "";
+      const selected = next[i];
+      if (typeof selected !== "string" || !options.includes(selected)) {
+        next[i] = options[0] ?? null;
       }
     }
     selectedGroupSegments.value = next;
@@ -78,7 +79,7 @@ const variableOptions = computed(() => {
   return allVisibleVariables.value.filter((varname) => {
     const segments = getGroupSegments(varname);
     return selectedGroupSegments.value.every((selected, idx) => {
-      if (!selected) {
+      if (selected === null) {
         return true;
       }
       return segments[idx] === selected;
@@ -123,14 +124,22 @@ function getOptionLabel(varname: string): string {
   <div class="column">
     <div class="control">
       <template v-for="level in groupLevels" :key="`group-${level}`">
+        <label class="is-size-7 has-text-grey" :for="`group-level-${level}`">
+          Group level {{ level + 1 }}
+        </label>
         <div class="select is-fullwidth mb-2">
-          <select v-model="selectedGroupSegments[level]" class="form-control">
+          <select
+            :id="`group-level-${level}`"
+            v-model="selectedGroupSegments[level]"
+            class="form-control"
+            :aria-label="`Group level ${level + 1}`"
+          >
             <option
               v-for="group in getGroupOptions(level)"
               :key="group"
               :value="group"
             >
-              Group {{ level + 1 }}: {{ group }}
+              {{ group }}
             </option>
           </select>
         </div>
