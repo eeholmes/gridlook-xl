@@ -92,8 +92,11 @@ const BATCH_SIZE = 60;
 let meshes: THREE.Mesh[] = [];
 watch(
   () => varnameSelector.value,
-  () => {
-    getData();
+  async (nextVarname, previousVarname) => {
+    if (nextVarname === previousVarname) {
+      return;
+    }
+    await datasourceUpdate();
   }
 );
 
