@@ -33,16 +33,21 @@ const maxGroupDepth = computed(() =>
   }, 0)
 );
 
-const selectedGroupSegments = ref<Array<string | null>>([]);
+const selectedGroupSegments = ref<Array<string | null>>(
+  Array.from({ length: maxGroupDepth.value }, () => null)
+);
 
-function getGroupOptions(level: number) {
+function getGroupOptionsForLevel(
+  level: number,
+  selections: Array<string | null>
+) {
   const options = new Set<string>();
   for (const varname of allVisibleVariables.value) {
     const segments = getGroupSegments(varname);
     if (segments.length <= level) {
       continue;
     }
-    const parentMatches = selectedGroupSegments.value
+    const parentMatches = selections
       .slice(0, level)
       .every((selected, idx) => !selected || segments[idx] === selected);
     if (parentMatches) {
@@ -53,24 +58,67 @@ function getGroupOptions(level: number) {
 }
 
 watch(
-  () => [allVisibleVariables.value, maxGroupDepth.value],
+  () => maxGroupDepth.value,
+  (depth) => {
+    selectedGroupSegments.value = selectedGroupSegments.value
+      .slice(0, depth)
+      .concat(
+        Array.from(
+          { length: Math.max(0, depth - selectedGroupSegments.value.length) },
+          () => null
+        )
+      );
+  },
+  { immediate: true }
+);
+
+const groupOptionsByLevel = computed(() => {
+  const optionsByLevel: string[][] = [];
+  for (let level = 0; level < maxGroupDepth.value; level++) {
+    optionsByLevel[level] = getGroupOptionsForLevel(
+      level,
+      selectedGroupSegments.value
+    );
+  }
+  return optionsByLevel;
+});
+
+watch(
+  () => [
+    allVisibleVariables.value,
+    maxGroupDepth.value,
+    selectedGroupSegments.value,
+  ],
   () => {
     const next = selectedGroupSegments.value.slice(0, maxGroupDepth.value);
+    let changed = next.length !== selectedGroupSegments.value.length;
     for (let i = 0; i < maxGroupDepth.value; i++) {
-      const options = getGroupOptions(i);
+      const options = getGroupOptionsForLevel(i, next);
       const selected = next[i];
       if (typeof selected !== "string" || !options.includes(selected)) {
         next[i] = options[0] ?? null;
+        changed = true;
       }
     }
-    selectedGroupSegments.value = next;
+    if (changed) {
+      selectedGroupSegments.value = next;
+    }
   },
-  { immediate: true, deep: true }
+  { immediate: true }
 );
 
 const groupLevels = computed(() =>
   Array.from({ length: maxGroupDepth.value }, (_, idx) => idx)
 );
+
+function setSelectedGroupSegment(level: number, value: string) {
+  const next = [...selectedGroupSegments.value];
+  next[level] = value || null;
+  for (let idx = level + 1; idx < next.length; idx++) {
+    next[idx] = null;
+  }
+  selectedGroupSegments.value = next;
+}
 
 const variableOptions = computed(() => {
   if (maxGroupDepth.value === 0) {
@@ -90,8 +138,10 @@ const variableOptions = computed(() => {
 watch(
   () => variableOptions.value,
   (options) => {
-    if (!options.includes(model.value)) {
-      model.value = options[0] ?? model.value;
+    if (options.length === 0) {
+      model.value = allVisibleVariables.value[0] ?? "-";
+    } else if (!options.includes(model.value)) {
+      model.value = options[0];
     }
   },
   { immediate: true }
@@ -130,12 +180,18 @@ function getOptionLabel(varname: string): string {
         <div class="select is-fullwidth mb-2">
           <select
             :id="`group-level-${level}`"
-            v-model="selectedGroupSegments[level]"
+            :value="selectedGroupSegments[level] ?? ''"
             class="form-control"
             :aria-label="`Group level ${level + 1}`"
+            @change="
+              setSelectedGroupSegment(
+                level,
+                ($event.target as HTMLSelectElement).value
+              )
+            "
           >
             <option
-              v-for="group in getGroupOptions(level)"
+              v-for="group in groupOptionsByLevel[level]"
               :key="group"
               :value="group"
             >
