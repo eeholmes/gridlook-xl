@@ -348,7 +348,7 @@ function inferSharedDatasetPath(
       .map((source) => source.dataset)
       .filter((dataset) => dataset.length > 0)
   );
-  return datasets.size === 1 ? [...datasets][0] : "";
+  return datasets.size === 1 ? (datasets.values().next().value as string) : "";
 }
 
 export async function indexFromZarr(src: string): Promise<TSources> {
