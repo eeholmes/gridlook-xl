@@ -16,6 +16,7 @@ import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
+  getLatLonData,
   isLatitudeName,
   isLongitudeName,
   mapMissingAndFillToNaN,
@@ -176,6 +177,11 @@ async function datasourceUpdate() {
 const isLatOnly = ref(false);
 const isGridGlobal = ref(false);
 async function getDims() {
+  const datavar = await getDataVar(varnameSelector.value, props.datasources!);
+  if (!datavar) {
+    return;
+  }
+
   // Assumptions: the last two dimensions of the data array are
   // latitude and longitude (in this order), or lat-only for zonally averaged data
   const dimensions = await ZarrDataManager.getDimensionNames(
@@ -190,23 +196,16 @@ async function getDims() {
     isLatitudeName(lastDim) && !isLongitudeName(secondLastDim);
   isLatOnly.value = latOnlyCheck;
 
-  const grid = props.datasources!.levels[0].grid;
-  if (latOnlyCheck) {
-    const latitudesData = await ZarrDataManager.getVariableData(grid, lastDim);
-    latitudes.value = new Float64Array(latitudesData.data as Float64Array);
+  const { latitudes: latitudeChunk, longitudes: longitudeChunk } =
+    await getLatLonData(datavar, props.datasources, varnameSelector.value);
+
+  latitudes.value = new Float64Array(latitudeChunk.data as Float64Array);
+  if (!longitudeChunk) {
     longitudes.value = Float64Array.from({ length: 360 }, (_, i) => i - 179.5);
-  } else {
-    const latName = secondLastDim;
-    const lonName = lastDim;
-    const [latitudesData, longitudesData] = await Promise.all([
-      ZarrDataManager.getVariableData(grid, latName),
-      ZarrDataManager.getVariableData(grid, lonName),
-    ]);
-    const myLongitudes = longitudesData.data as Float64Array;
-    const myLatitudes = latitudesData.data as Float64Array;
-    longitudes.value = new Float64Array(new Set(myLongitudes));
-    latitudes.value = new Float64Array(new Set(myLatitudes));
+    return;
   }
+
+  longitudes.value = new Float64Array(longitudeChunk.data as Float64Array);
 }
 
 function rotatedToGeographic(
