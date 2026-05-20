@@ -280,7 +280,8 @@ async function indexFromIcechunkFallback(
     root.attrs?.title as string,
     datasources,
     icechunkStorePath,
-    ZARR_FORMAT.V3
+    ZARR_FORMAT.V3,
+    groupPath
   );
 }
 
@@ -288,7 +289,8 @@ function createIndex(
   title: string,
   datasources: Record<string, TDataSource>,
   src: string,
-  zarrFormat: TZarrFormat
+  zarrFormat: TZarrFormat,
+  groupPath: string = ""
 ): TSources {
   return {
     name: title,
@@ -297,11 +299,11 @@ function createIndex(
       {
         time: {
           store: src,
-          dataset: "",
+          dataset: groupPath,
         },
         grid: {
           store: src,
-          dataset: "",
+          dataset: groupPath,
         },
         datasources,
       },

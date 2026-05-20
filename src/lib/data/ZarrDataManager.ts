@@ -151,6 +151,15 @@ export class ZarrDataManager {
     }
     // Capture locally so a concurrent path switch cannot swap the store under us.
     const root = await this.pendingStore;
+
+    // For Icechunk stores, zarr.open on a nested group path can hang because
+    // the Icechunk library may not resolve intermediate group metadata the same
+    // way it resolves array metadata. Return the root group unconditionally and
+    // let getVariableInfo compose the full variable path (datasetPath + varname).
+    if (storePath.startsWith(this.ICECHUNK_PREFIX)) {
+      return await zarr.open(root, { kind: "group" });
+    }
+
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
     const target = datasetPath ? root.resolve(datasetPath) : root;
     const dataset = await zarr.open(target, { kind: "group" });
@@ -178,8 +187,16 @@ export class ZarrDataManager {
     datasource: TDatasetSource,
     variable: string
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
+    const storePath = this.normalizeStorePath(datasource.store);
+    const datasetPath = this.normalizeDatasetPath(datasource.dataset);
     const group = await this.getDataset(datasource);
-    const array = await this.getVariable(group, variable);
+    // For Icechunk stores getDataset returns the root group, so compose the
+    // full path from the dataset (group) path and the variable name.
+    const varPath =
+      storePath.startsWith(this.ICECHUNK_PREFIX) && datasetPath
+        ? `${datasetPath}/${variable}`
+        : variable;
+    const array = await this.getVariable(group, varPath);
     return array;
   }
 
