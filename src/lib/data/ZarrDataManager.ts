@@ -211,6 +211,7 @@ export class ZarrDataManager {
       : variablePath;
 
     const triedPaths = new Set<string>();
+    let lastResolutionError: unknown = null;
     for (const candidatePath of [prefixedPath, unprefixedPath, variablePath]) {
       if (triedPaths.has(candidatePath) || candidatePath.length === 0) {
         continue;
@@ -218,13 +219,17 @@ export class ZarrDataManager {
       triedPaths.add(candidatePath);
       try {
         return await this.getVariable(group, candidatePath);
-      } catch {
+      } catch (error) {
+        lastResolutionError = error;
         // Try the next candidate path.
       }
     }
 
     throw new Error(
-      `Failed to resolve variable "${variable}" in dataset "${datasetPath}" for store "${storePath}"`
+      `Failed to resolve variable "${variable}" in dataset "${datasetPath}" for store "${storePath}"`,
+      {
+        cause: lastResolutionError ?? undefined,
+      }
     );
   }
 
