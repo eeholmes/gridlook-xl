@@ -21,6 +21,12 @@ export type TZarrVariableMetadata = {
 };
 
 type TDatasetSource = Pick<TDataSource, "dataset" | "store">;
+
+export type TResolvedVariableReference = {
+  datasource: TDatasetSource;
+  variable: string;
+};
+
 export class ZarrDataManager {
   private static readonly ICECHUNK_PREFIX = "icechunk+";
   private static pendingStore: Promise<
@@ -271,8 +277,12 @@ export class ZarrDataManager {
     variable: string
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const crsVar = await this.findCRSVar(datasource, variable);
-    const variableSource = this.getDatasetSource(datasource, variable);
-    return await this.getVariableInfo(variableSource, crsVar);
+    const resolved = this.resolveVariableReference(
+      datasource,
+      variable,
+      crsVar
+    );
+    return await this.getVariableInfo(resolved.datasource, resolved.variable);
   }
 
   static async findCRSVar(datasources: TSources, varname: string) {
@@ -293,6 +303,56 @@ export class ZarrDataManager {
     varname: string
   ): TDatasetSource {
     return datasources.levels[0].datasources[varname];
+  }
+
+  static resolveVariableReference(
+    datasources: TSources,
+    currentVarname: string,
+    targetVarname: string
+  ): TResolvedVariableReference {
+    const levelDatasources = datasources.levels[0].datasources;
+    const normalizedTarget = this.normalizeVariablePath(targetVarname);
+    const directMatch = levelDatasources[normalizedTarget];
+    if (directMatch) {
+      return {
+        datasource: directMatch,
+        variable: normalizedTarget,
+      };
+    }
+
+    const currentSource = this.getDatasetSource(datasources, currentVarname);
+    const currentDataset = this.normalizeDatasetPath(currentSource.dataset);
+    const datasetQualifiedTarget = currentDataset
+      ? `${currentDataset}/${normalizedTarget}`
+      : normalizedTarget;
+    const datasetQualifiedMatch = levelDatasources[datasetQualifiedTarget];
+    if (datasetQualifiedMatch) {
+      return {
+        datasource: datasetQualifiedMatch,
+        variable: datasetQualifiedTarget,
+      };
+    }
+
+    const targetLeafName =
+      normalizedTarget.split("/").at(-1) ?? normalizedTarget;
+    const sameDatasetMatch = Object.entries(levelDatasources).find(
+      ([varname, source]) =>
+        (this.normalizeVariablePath(varname).split("/").at(-1) ?? varname) ===
+          targetLeafName &&
+        this.normalizeDatasetPath(source.dataset) === currentDataset
+    );
+    if (sameDatasetMatch) {
+      const [matchedVarname, matchedSource] = sameDatasetMatch;
+      return {
+        datasource: matchedSource,
+        variable: matchedVarname,
+      };
+    }
+
+    return {
+      datasource: currentSource,
+      variable: normalizedTarget,
+    };
   }
 
   static async getDimensionNames(datasources: TSources, varname: string) {

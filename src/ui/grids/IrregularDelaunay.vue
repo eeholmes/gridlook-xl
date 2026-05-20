@@ -682,7 +682,7 @@ async function buildDimensionConfig(
   updateMode: TUpdateMode
 ) {
   const { latitudes, longitudes, latitudesAttrs, longitudesAttrs } =
-    await getLatLonData(datavar, props.datasources);
+    await getLatLonData(datavar, props.datasources, varnameSelector.value);
   const dimensions = await ZarrDataManager.getDimensionNames(
     props.datasources!,
     varnameSelector.value

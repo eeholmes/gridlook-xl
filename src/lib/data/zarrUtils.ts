@@ -241,22 +241,32 @@ function applyScaleFactor(
 
 async function fetchLatLonVariables(
   datasources: TSources,
+  currentVarname: string,
   latitudeName: string,
   longitudeName: string
 ) {
-  const gridsource = datasources.levels[0].grid;
+  const latitudeReference = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    latitudeName
+  );
 
   const latitudesVar = await ZarrDataManager.getVariableInfo(
-    gridsource,
-    latitudeName
+    latitudeReference.datasource,
+    latitudeReference.variable
   );
 
   let longitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable> | null =
     null;
   try {
-    longitudesVar = await ZarrDataManager.getVariableInfo(
-      gridsource,
+    const longitudeReference = ZarrDataManager.resolveVariableReference(
+      datasources,
+      currentVarname,
       longitudeName
+    );
+    longitudesVar = await ZarrDataManager.getVariableInfo(
+      longitudeReference.datasource,
+      longitudeReference.variable
     );
   } catch {
     // Longitude variable doesn't exist - this is a lat-only dataset
@@ -268,6 +278,7 @@ async function fetchLatLonVariables(
 export async function getLatLonData(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   datasources: TSources | undefined,
+  currentVarname: string,
   isRotated = false
 ) {
   const { latitudeName, longitudeName } = findLatLonNames(
@@ -278,6 +289,7 @@ export async function getLatLonData(
 
   const { latitudesVar, longitudesVar } = await fetchLatLonVariables(
     datasources!,
+    currentVarname,
     latitudeName,
     longitudeName
   );

@@ -177,7 +177,8 @@ async function getGrid(
 ) {
   const { latitudes, longitudes } = await getLatLonData(
     datavar,
-    props.datasources
+    props.datasources,
+    varnameSelector.value
   );
   const isMissingOrFill = createMissingOrFillPredicate(datavar);
 

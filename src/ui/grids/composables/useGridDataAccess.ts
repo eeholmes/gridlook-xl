@@ -45,6 +45,7 @@ export function useGridDataAccess() {
 
   async function getTimeInfo(
     datasources: TSources,
+    currentVariable: string,
     dimensionRanges: TDimensionRange[],
     dimensionIndex: number,
     index: number
@@ -53,14 +54,24 @@ export function useGridDataAccess() {
       return {};
     }
     try {
-      const myDatasource = datasources!.levels[0].time;
+      const timeDimName = dimensionRanges[dimensionIndex]?.name ?? "time";
+      const timeReference = ZarrDataManager.resolveVariableReference(
+        datasources,
+        currentVariable,
+        timeDimName
+      );
+      const myDatasource = timeReference.datasource;
       const timevalues = (
-        await ZarrDataManager.getVariableData(myDatasource, "time", [null])
+        await ZarrDataManager.getVariableData(
+          myDatasource,
+          timeReference.variable,
+          [null]
+        )
       ).data as Int32Array;
 
       const timevar = await ZarrDataManager.getVariableInfo(
         myDatasource,
-        "time"
+        timeReference.variable
       );
       return {
         values: timevalues,
