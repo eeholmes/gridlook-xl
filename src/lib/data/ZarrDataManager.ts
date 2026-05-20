@@ -107,6 +107,10 @@ export class ZarrDataManager {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }
 
+  private static normalizeVariablePath(variable: string) {
+    return variable.replace(/^\/+/, "").replace(/\/+$/, "");
+  }
+
   public static async createNewStore(storePath: string) {
     const parsed = this.parseStorePath(storePath);
     if (parsed.backend === "icechunk") {
@@ -189,13 +193,17 @@ export class ZarrDataManager {
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const storePath = this.normalizeStorePath(datasource.store);
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
+    const variablePath = this.normalizeVariablePath(variable);
     const group = await this.getDataset(datasource);
     // For Icechunk stores getDataset returns the root group, so compose the
     // full path from the dataset (group) path and the variable name.
-    const varPath =
-      storePath.startsWith(this.ICECHUNK_PREFIX) && datasetPath
-        ? `${datasetPath}/${variable}`
-        : variable;
+    let varPath = variablePath;
+    if (storePath.startsWith(this.ICECHUNK_PREFIX) && datasetPath) {
+      const datasetPrefix = `${datasetPath}/`;
+      varPath = variablePath.startsWith(datasetPrefix)
+        ? variablePath
+        : `${datasetPrefix}${variablePath}`;
+    }
     const array = await this.getVariable(group, varPath);
     return array;
   }

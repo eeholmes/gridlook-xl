@@ -146,6 +146,57 @@ async function collectVariables(
   return { candidates, dimensions };
 }
 
+function getParentDatasetPath(absPath: string): string {
+  return absPath.replace(/^\/+/, "").split("/").slice(0, -1).join("/");
+}
+
+function isNodeWithinGroup(nodePath: string, groupAbsPath: string | null) {
+  return (
+    !groupAbsPath ||
+    nodePath === groupAbsPath ||
+    nodePath.startsWith(`${groupAbsPath}/`)
+  );
+}
+
+async function collectNodeListedVariable(
+  node: { path: string },
+  root: zarr.Group<zarr.AsyncReadable>,
+  src: string,
+  groupAbsPath: string | null,
+  groupPath: string,
+  dimensions: Set<string>
+) {
+  const variable = await zarr.open(root.resolve(node.path), {
+    kind: "array",
+  });
+  searchDimensionsAndCoordinates(dimensions, variable);
+
+  const absPath = node.path; // e.g. "/group1/group2/varname"
+  const normalizedAbsPath = absPath.replace(/^\/+/, "");
+  const parentDataset = getParentDatasetPath(absPath);
+  const varname =
+    groupAbsPath && absPath.startsWith(`${groupAbsPath}/`)
+      ? absPath.slice(groupAbsPath.length + 1)
+      : normalizedAbsPath;
+  const datasetPath = groupPath || parentDataset;
+
+  return {
+    [varname]: {
+      store: src,
+      dataset: datasetPath,
+      hidden: !isValidVariable(
+        varname,
+        variable.shape,
+        variable.dimensionNames as string[]
+      ),
+      attrs: {
+        ...variable.attrs,
+        dimensionNames: variable.dimensionNames,
+      },
+    },
+  };
+}
+
 async function collectVariablesFromNodeList(
   store: TNodeListedStore,
   root: zarr.Group<zarr.AsyncReadable>,
@@ -155,10 +206,7 @@ async function collectVariablesFromNodeList(
   candidates: PromiseSettledResult<Record<string, TDataSource>>[];
   dimensions: Set<string>;
 }> {
-  // When a group path is given, only include arrays that live at or inside
-  // that group.  The two clauses handle:
-  //   • exact match  – the array IS the group path (rare but valid)
-  //   • prefix match – the array lives somewhere inside the group
+  // If a group path is provided, include only arrays in that group subtree.
   const groupAbsPath = groupPath ? `/${groupPath}` : null;
 
   const dimensions = new Set<string>();
@@ -166,42 +214,17 @@ async function collectVariablesFromNodeList(
     store
       .listNodes()
       .filter((node) => node.nodeData?.type === "array")
-      .filter(
-        (node) =>
-          !groupAbsPath ||
-          node.path === groupAbsPath ||
-          node.path.startsWith(`${groupAbsPath}/`)
+      .filter((node) => isNodeWithinGroup(node.path, groupAbsPath))
+      .map((node) =>
+        collectNodeListedVariable(
+          node,
+          root,
+          src,
+          groupAbsPath,
+          groupPath,
+          dimensions
+        )
       )
-      .map(async (node) => {
-        const variable = await zarr.open(root.resolve(node.path), {
-          kind: "array",
-        });
-        searchDimensionsAndCoordinates(dimensions, variable);
-
-        // When a groupPath is set, expose only the variable's name relative
-        // to that group so the UI shows clean, short names.
-        const absPath = node.path; // e.g. "/group1/group2/varname"
-        const varname =
-          groupAbsPath && absPath.startsWith(`${groupAbsPath}/`)
-            ? absPath.slice(groupAbsPath.length + 1)
-            : absPath.replace(/^\//, "");
-
-        return {
-          [varname]: {
-            store: src,
-            dataset: groupPath,
-            hidden: !isValidVariable(
-              varname,
-              variable.shape,
-              variable.dimensionNames as string[]
-            ),
-            attrs: {
-              ...variable.attrs,
-              dimensionNames: variable.dimensionNames,
-            },
-          },
-        };
-      })
   );
 
   return { candidates, dimensions };
