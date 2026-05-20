@@ -51,6 +51,62 @@ export class ZarrDataManager {
       : `${this.ICECHUNK_PREFIX}${storeUrl}`;
   }
 
+  /**
+   * Given a URL that may point to a nested group inside an Icechunk repository,
+   * probes progressively shorter URL prefixes to find the actual Icechunk store
+   * root. Returns the store path (with the "icechunk+" prefix), the group
+   * path within the store (empty string when the URL already points to the root),
+   * and the opened store instance so callers can reuse it without reopening.
+   *
+   * Example: "icechunk+https://host/store/group1/group2"
+   *   → { storePath: "icechunk+https://host/store", groupPath: "group1/group2", store }
+   *
+   * Note: in the worst case this makes one HTTP request per path segment before
+   * it finds the store root, so it is intentionally used only as a fallback.
+   */
+  static async splitIcechunkStoreAndGroup(src: string): Promise<{
+    storePath: string;
+    groupPath: string;
+    store: zarr.AsyncReadable | null;
+  }> {
+    const rawUrl = src.startsWith(this.ICECHUNK_PREFIX)
+      ? src.slice(this.ICECHUNK_PREFIX.length)
+      : src;
+    const normalizedUrl = rawUrl.replace(/\/+$/, "");
+    const urlParts = normalizedUrl.split("/");
+
+    // For "https://host/a/b" the parts are ["https:", "", "host", "a", "b"].
+    // Never strip below the scheme + authority (3 segments for https://).
+    let minSegments = urlParts.length;
+    if (
+      urlParts.length > 2 &&
+      urlParts[0].endsWith(":") &&
+      urlParts[1] === ""
+    ) {
+      minSegments = 3;
+    }
+
+    for (let i = urlParts.length; i >= minSegments; i--) {
+      const storeUrl = urlParts.slice(0, i).join("/");
+      const groupPath = urlParts.slice(i).join("/");
+      const storePath = `${this.ICECHUNK_PREFIX}${storeUrl}`;
+      try {
+        const store = await this.createNewStore(storePath);
+        return { storePath, groupPath, store };
+      } catch {
+        // Not a valid Icechunk store at this URL; try a shorter path.
+      }
+    }
+
+    // Fallback: nothing worked – return the full URL with an empty group path
+    // so the caller can surface a meaningful error.
+    return {
+      storePath: `${this.ICECHUNK_PREFIX}${normalizedUrl}`,
+      groupPath: "",
+      store: null,
+    };
+  }
+
   private static normalizeDatasetPath(dataset: string) {
     return dataset.replace(/^\/+/, "").replace(/\/+$/, "");
   }

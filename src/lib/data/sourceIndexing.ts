@@ -149,27 +149,48 @@ async function collectVariables(
 async function collectVariablesFromNodeList(
   store: TNodeListedStore,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string
+  src: string,
+  groupPath: string = ""
 ): Promise<{
   candidates: PromiseSettledResult<Record<string, TDataSource>>[];
   dimensions: Set<string>;
 }> {
+  // When a group path is given, only include arrays that live inside that group.
+  // We include arrays whose absolute path starts with the group prefix followed
+  // by "/" (i.e. direct or nested children of the group).
+  // The exact-path clause (node.path === groupAbsPath) is a safety guard for
+  // any edge-case where the store reports an array at the group path itself.
+  const groupAbsPath = groupPath ? `/${groupPath}` : null;
+
   const dimensions = new Set<string>();
   const candidates = await Promise.allSettled(
     store
       .listNodes()
       .filter((node) => node.nodeData?.type === "array")
+      .filter(
+        (node) =>
+          !groupAbsPath ||
+          node.path === groupAbsPath ||
+          node.path.startsWith(`${groupAbsPath}/`)
+      )
       .map(async (node) => {
         const variable = await zarr.open(root.resolve(node.path), {
           kind: "array",
         });
         searchDimensionsAndCoordinates(dimensions, variable);
 
-        const varname = node.path.replace(/^\//, "");
+        // When a groupPath is set, expose only the variable's name relative
+        // to that group so the UI shows clean, short names.
+        const absPath = node.path; // e.g. "/group1/group2/varname"
+        const varname =
+          groupAbsPath && absPath.startsWith(`${groupAbsPath}/`)
+            ? absPath.slice(groupAbsPath.length + 1)
+            : absPath.replace(/^\//, "");
+
         return {
           [varname]: {
             store: src,
-            dataset: "",
+            dataset: groupPath,
             hidden: !isValidVariable(
               varname,
               variable.shape,
@@ -217,12 +238,14 @@ async function processZarrVariables(
 async function processNodeListedVariables(
   store: TNodeListedStore,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string
+  src: string,
+  groupPath: string = ""
 ): Promise<Record<string, TDataSource>> {
   const { candidates, dimensions } = await collectVariablesFromNodeList(
     store,
     root,
-    src
+    src,
+    groupPath
   );
   return mergeDatasourceCandidates(candidates, dimensions);
 }
@@ -232,11 +255,31 @@ async function indexFromIcechunkFallback(
   v2Error: unknown,
   v3Error: unknown
 ): Promise<TSources> {
-  const icechunkStorePath = ZarrDataManager.toIcechunkStorePath(src);
-  const store = await ZarrDataManager.createNewStore(icechunkStorePath);
-  if (!isNodeListedStore(store)) {
+  // Find the actual Icechunk store root – if `src` already points to the root
+  // this is a single attempt; if it embeds a nested-group path the function
+  // probes progressively shorter prefixes to discover the real store URL.
+  const {
+    storePath: icechunkStorePath,
+    groupPath,
+    store: probeStore,
+  } = await ZarrDataManager.splitIcechunkStoreAndGroup(src);
+
+  // Reuse the store opened during probing to avoid a redundant network round-trip.
+  // If probing exhausted all candidates without success, attempt one final open so
+  // the error is captured and reported in the AggregateError below.
+  let store: zarr.AsyncReadable | null = probeStore;
+  let storeError: unknown = null;
+  if (!store) {
+    try {
+      store = await ZarrDataManager.createNewStore(icechunkStorePath);
+    } catch (e) {
+      storeError = e;
+    }
+  }
+
+  if (!store || !isNodeListedStore(store)) {
     throw new AggregateError(
-      [v2Error, v3Error],
+      [v2Error, v3Error, storeError].filter(Boolean),
       `Failed to open source at ${src} as Zarr v2 or Zarr v3, and Icechunk fallback was unavailable for ${icechunkStorePath}`
     );
   }
@@ -244,13 +287,15 @@ async function indexFromIcechunkFallback(
   const datasources = await processNodeListedVariables(
     store,
     root,
-    icechunkStorePath
+    icechunkStorePath,
+    groupPath
   );
   return createIndex(
     root.attrs?.title as string,
     datasources,
     icechunkStorePath,
-    ZARR_FORMAT.V3
+    ZARR_FORMAT.V3,
+    groupPath
   );
 }
 
@@ -258,7 +303,8 @@ function createIndex(
   title: string,
   datasources: Record<string, TDataSource>,
   src: string,
-  zarrFormat: TZarrFormat
+  zarrFormat: TZarrFormat,
+  groupPath: string = ""
 ): TSources {
   return {
     name: title,
@@ -267,11 +313,11 @@ function createIndex(
       {
         time: {
           store: src,
-          dataset: "",
+          dataset: groupPath,
         },
         grid: {
           store: src,
-          dataset: "",
+          dataset: groupPath,
         },
         datasources,
       },
