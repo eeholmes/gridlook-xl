@@ -320,8 +320,7 @@ function createIndex(
   zarrFormat: TZarrFormat,
   groupPath: string = ""
 ): TSources {
-  const defaultDataset =
-    groupPath || inferSharedDatasetPath(datasources) || groupPath;
+  const defaultDataset = groupPath || inferSharedDatasetPath(datasources);
   return {
     name: title,
     zarr_format: zarrFormat, // eslint-disable-line camelcase
