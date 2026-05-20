@@ -186,6 +186,33 @@ function findCoordinateDimensionIndexMap(dimensionNames: string[]) {
   };
 }
 
+function getExcludedRegularDimensionIndices(dimensionNames: string[]) {
+  const lastIndex = dimensionNames.length - 1;
+  const secondLastIndex = dimensionNames.length - 2;
+  const lastDimension = dimensionNames[lastIndex];
+  const secondLastDimension =
+    secondLastIndex >= 0 ? dimensionNames[secondLastIndex] : undefined;
+
+  if (
+    secondLastDimension &&
+    isLatitudeName(secondLastDimension) &&
+    isLongitudeName(lastDimension)
+  ) {
+    return [secondLastIndex, lastIndex];
+  }
+
+  if (
+    isLatitudeName(lastDimension) &&
+    (!secondLastDimension || !isLongitudeName(secondLastDimension))
+  ) {
+    return [lastIndex];
+  }
+
+  const { latitude, longitude } =
+    findCoordinateDimensionIndexMap(dimensionNames);
+  return [latitude, longitude].filter((idx): idx is number => idx !== -1);
+}
+
 async function getDims() {
   const datavar = await getDataVar(varnameSelector.value, props.datasources!);
   if (!datavar) {
@@ -617,10 +644,7 @@ async function buildDimensionConfig(
     props.datasources!,
     varnameSelector.value
   );
-  const excludedDims = [
-    latitudeDimensionIndex.value,
-    longitudeDimensionIndex.value,
-  ].filter((idx): idx is number => idx !== null);
+  const excludedDims = getExcludedRegularDimensionIndices(dimensionNames);
   return buildDimensionRangesAndIndices(
     datavar,
     dimensionNames,
