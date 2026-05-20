@@ -334,10 +334,10 @@ export class ZarrDataManager {
     }
 
     const targetLeafName =
-      normalizedTarget.split("/").at(-1) ?? normalizedTarget;
+      normalizedTarget.split("/").pop() ?? normalizedTarget;
     const sameDatasetMatch = Object.entries(levelDatasources).find(
       ([varname, source]) =>
-        (this.normalizeVariablePath(varname).split("/").at(-1) ?? varname) ===
+        (this.normalizeVariablePath(varname).split("/").pop() ?? varname) ===
           targetLeafName &&
         this.normalizeDatasetPath(source.dataset) === currentDataset
     );

@@ -176,7 +176,7 @@ const isGridGlobal = ref(false);
 const latitudeDimensionIndex = ref<number | null>(null);
 const longitudeDimensionIndex = ref<number | null>(null);
 
-function findCoordinateDimensionIndices(dimensionNames: string[]) {
+function findCoordinateDimensionIndexMap(dimensionNames: string[]) {
   return {
     latitude: dimensionNames.findIndex((name) => isLatitudeName(name)),
     longitude: dimensionNames.findIndex((name) => isLongitudeName(name)),
@@ -192,7 +192,7 @@ async function getDims() {
     props.datasources!,
     varnameSelector.value
   );
-  const { latitude, longitude } = findCoordinateDimensionIndices(dimensions);
+  const { latitude, longitude } = findCoordinateDimensionIndexMap(dimensions);
   latitudeDimensionIndex.value = latitude !== -1 ? latitude : null;
   longitudeDimensionIndex.value = longitude !== -1 ? longitude : null;
 
