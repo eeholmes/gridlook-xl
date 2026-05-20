@@ -320,6 +320,8 @@ function createIndex(
   zarrFormat: TZarrFormat,
   groupPath: string = ""
 ): TSources {
+  const defaultDataset =
+    groupPath || inferSharedDatasetPath(datasources) || groupPath;
   return {
     name: title,
     zarr_format: zarrFormat, // eslint-disable-line camelcase
@@ -327,16 +329,27 @@ function createIndex(
       {
         time: {
           store: src,
-          dataset: groupPath,
+          dataset: defaultDataset,
         },
         grid: {
           store: src,
-          dataset: groupPath,
+          dataset: defaultDataset,
         },
         datasources,
       },
     ],
   };
+}
+
+function inferSharedDatasetPath(
+  datasources: Record<string, TDataSource>
+): string {
+  const datasets = new Set(
+    Object.values(datasources)
+      .map((source) => source.dataset)
+      .filter((dataset) => dataset.length > 0)
+  );
+  return datasets.size === 1 ? [...datasets][0] : "";
 }
 
 export async function indexFromZarr(src: string): Promise<TSources> {
