@@ -195,19 +195,37 @@ export class ZarrDataManager {
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
     const variablePath = this.normalizeVariablePath(variable);
     const group = await this.getDataset(datasource);
-    // For Icechunk stores getDataset returns the root group, so compose the
-    // full path from the dataset (group) path and the variable name.
-    let varPath = variablePath;
-    if (storePath.startsWith(this.ICECHUNK_PREFIX) && datasetPath) {
-      const datasetPrefix = `${datasetPath}/`;
-      // Root-indexed grouped datasets may already include the dataset prefix
-      // in the variable key (e.g. "spatial/blh"), so avoid double-prefixing.
-      varPath = variablePath.startsWith(datasetPrefix)
-        ? variablePath
-        : `${datasetPrefix}${variablePath}`;
+    if (!storePath.startsWith(this.ICECHUNK_PREFIX) || !datasetPath) {
+      return await this.getVariable(group, variablePath);
     }
-    const array = await this.getVariable(group, varPath);
-    return array;
+
+    // For Icechunk stores getDataset returns the root group, so compose the
+    // full path from the dataset path and variable name. Root indexing may
+    // provide either "blh" or "spatial/blh", so try both forms.
+    const datasetPrefix = `${datasetPath}/`;
+    const prefixedPath = variablePath.startsWith(datasetPrefix)
+      ? variablePath
+      : `${datasetPrefix}${variablePath}`;
+    const unprefixedPath = variablePath.startsWith(datasetPrefix)
+      ? variablePath.slice(datasetPrefix.length)
+      : variablePath;
+
+    const triedPaths = new Set<string>();
+    for (const candidatePath of [prefixedPath, unprefixedPath, variablePath]) {
+      if (triedPaths.has(candidatePath) || candidatePath.length === 0) {
+        continue;
+      }
+      triedPaths.add(candidatePath);
+      try {
+        return await this.getVariable(group, candidatePath);
+      } catch {
+        // Try the next candidate path.
+      }
+    }
+
+    throw new Error(
+      `Failed to resolve variable "${variable}" in dataset "${datasetPath}" for store "${storePath}"`
+    );
   }
 
   static async getVariableInfoByDatasetSources(
