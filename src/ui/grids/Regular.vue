@@ -415,14 +415,17 @@ function cleanupMeshes(totalBatches: number) {
   }
   for (const mesh of meshes) {
     mesh.geometry.dispose();
-    const mat = mesh.material as THREE.ShaderMaterial;
-    if (mat.uniforms?.data?.value instanceof THREE.Texture) {
-      mat.uniforms.data.value.dispose();
-    }
-    mat.dispose();
+    disposeMeshMaterial(mesh.material as THREE.ShaderMaterial);
     getScene()?.remove(mesh);
   }
   meshes.length = 0;
+}
+
+function disposeMeshMaterial(mat: THREE.ShaderMaterial) {
+  if (mat.uniforms?.data?.value instanceof THREE.Texture) {
+    mat.uniforms.data.value.dispose();
+  }
+  mat.dispose();
 }
 
 function createBatchGeometry(
@@ -686,12 +689,8 @@ async function fetchAndRenderData(
   updateHistogram(rawData, min, max, missingValue, fillValue);
 
   for (const mesh of meshes) {
-    const oldMaterial = mesh.material as THREE.ShaderMaterial;
-    // Dispose old texture before replacing material to avoid GPU memory leaks
-    if (oldMaterial.uniforms?.data?.value instanceof THREE.Texture) {
-      oldMaterial.uniforms.data.value.dispose();
-    }
-    oldMaterial.dispose();
+    // Dispose old texture and material to avoid GPU memory leaks
+    disposeMeshMaterial(mesh.material as THREE.ShaderMaterial);
     mesh.material = material;
     mesh.material.needsUpdate = true;
   }

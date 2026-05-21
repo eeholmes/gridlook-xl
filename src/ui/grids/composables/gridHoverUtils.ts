@@ -351,8 +351,10 @@ export function setHoverLookupFromRegularIndex(
   const { lats, lons, data, lonCount, fillValue, missingValue } = index;
   setHoverLookup((lat, lon) => {
     const latIdx = binarySearchNearest(lats, lat);
-    // Normalize lon to [0,360) if the lons axis uses that convention, otherwise [-180,180)
-    const normalizedLon = lons[0] >= 0 ? ((lon % 360) + 360) % 360 : lon;
+    // Detect longitude convention: if any value exceeds 180 the axis uses [0,360)
+    // and the incoming lon (which is in [-180,180)) must be mapped accordingly.
+    const uses0to360 = lons.some((v) => v > 180);
+    const normalizedLon = uses0to360 ? ((lon % 360) + 360) % 360 : lon;
     const lonIdx = binarySearchNearest(lons, normalizedLon);
     const value = data[latIdx * lonCount + lonIdx];
     const missing = isMissingGridValue(value, fillValue, missingValue);

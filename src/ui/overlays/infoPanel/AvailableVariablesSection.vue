@@ -90,7 +90,7 @@ function buildMetadataFromSource(
     loading: false,
     error:
       !dtype && !Array.isArray(dimensionNames)
-        ? `Could not load variable ${name}`
+        ? `Incomplete indexed metadata for variable ${name}`
         : null,
   };
 }
