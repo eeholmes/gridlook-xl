@@ -218,6 +218,28 @@ function isMissingGridValue(
   );
 }
 
+function createSampleIndexLookup(
+  index: TGeoSampleIndex,
+  fillValue: number,
+  missingValue: number
+): (lat: number, lon: number) => TGridHoverLookupResult | null {
+  return (lat, lon) => {
+    const sample = index.findNearest(lat, lon);
+    if (!sample) {
+      return null;
+    }
+    const missing = isMissingGridValue(sample.value, fillValue, missingValue);
+    return {
+      lat: sample.lat,
+      lon: sample.lon,
+      value: missing ? null : sample.value,
+      status: missing
+        ? HOVERED_GRID_POINT_STATUS.MISSING
+        : HOVERED_GRID_POINT_STATUS.VALUE,
+    };
+  };
+}
+
 export function useGridHoverLookup(
   hoveredGeoPoint: Readonly<ShallowRef<THoverGeoPoint | null>>
 ) {
@@ -272,24 +294,75 @@ export function useGridHoverLookup(
   };
 }
 
-function createSampleIndexLookup(
-  index: TGeoSampleIndex,
+/**
+ * Create a hover index for regular lat/lon grids.
+ *
+ * Rather than building a flat sample array and a general bucket index (which
+ * allocates O(lat*lon) objects), we store the sorted latitude and longitude
+ * axes and the raw data buffer and use binary search on each axis independently.
+ * This is O(log(lat) + log(lon)) per lookup and O(lat+lon+data) memory.
+ *
+ * For rotated grids the caller must supply pre-computed geographic lat/lon
+ * as a TGeoSampleIndex (via createGeoSampleIndex) since rotated grids cannot
+ * be searched in this way.
+ */
+export type TRegularGridHoverIndex = {
+  lats: Float64Array;
+  lons: Float64Array;
+  data: Float32Array;
+  lonCount: number;
+  fillValue: number;
+  missingValue: number;
+};
+
+function binarySearchNearest(arr: Float64Array, value: number): number {
+  let lo = 0;
+  let hi = arr.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] < value) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  if (lo > 0 && Math.abs(arr[lo - 1] - value) < Math.abs(arr[lo] - value)) {
+    return lo - 1;
+  }
+  return lo;
+}
+
+export function createRegularGridHoverIndex(
+  lats: Float64Array,
+  lons: Float64Array,
+  data: Float32Array,
   fillValue: number,
   missingValue: number
-): (lat: number, lon: number) => TGridHoverLookupResult | null {
-  return (lat, lon) => {
-    const sample = index.findNearest(lat, lon);
-    if (!sample) {
-      return null;
-    }
-    const missing = isMissingGridValue(sample.value, fillValue, missingValue);
+): TRegularGridHoverIndex {
+  return { lats, lons, data, lonCount: lons.length, fillValue, missingValue };
+}
+
+export function setHoverLookupFromRegularIndex(
+  index: TRegularGridHoverIndex,
+  setHoverLookup: (
+    fn: (lat: number, lon: number) => TGridHoverLookupResult | null
+  ) => void
+) {
+  const { lats, lons, data, lonCount, fillValue, missingValue } = index;
+  setHoverLookup((lat, lon) => {
+    const latIdx = binarySearchNearest(lats, lat);
+    // Normalize lon to [0,360) if the lons axis uses that convention, otherwise [-180,180)
+    const normalizedLon = lons[0] >= 0 ? ((lon % 360) + 360) % 360 : lon;
+    const lonIdx = binarySearchNearest(lons, normalizedLon);
+    const value = data[latIdx * lonCount + lonIdx];
+    const missing = isMissingGridValue(value, fillValue, missingValue);
     return {
-      lat: sample.lat,
-      lon: sample.lon,
-      value: missing ? null : sample.value,
+      lat: lats[latIdx],
+      lon: ProjectionHelper.normalizeLongitude(lons[lonIdx]),
+      value: missing ? null : value,
       status: missing
         ? HOVERED_GRID_POINT_STATUS.MISSING
         : HOVERED_GRID_POINT_STATUS.VALUE,
     };
-  };
+  });
 }

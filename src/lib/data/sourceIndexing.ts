@@ -128,6 +128,8 @@ async function collectVariables(
             [varname]: {
               store: src,
               dataset: "",
+              dtype: String(variable.dtype),
+              shape: variable.shape,
               hidden: !isValidVariable(
                 varname,
                 variable.shape,
@@ -189,6 +191,8 @@ async function collectNodeListedVariable(
     [varname]: {
       store: src,
       dataset: datasetPath,
+      dtype: String(variable.dtype),
+      shape: variable.shape,
       hidden: !isValidVariable(
         varname,
         variable.shape,

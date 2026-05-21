@@ -44,27 +44,6 @@ function normalizeDimensionNames(
   return [];
 }
 
-function getSourceDimensionNames(source: TDataSource) {
-  return normalizeDimensionNames(source.attrs?.dimensionNames);
-}
-
-function getInitialMetadata(source: TDataSource): TVariableMetadata {
-  return {
-    attrs: source.attrs ?? null,
-    dimensions: getSourceDimensionNames(source),
-    dtype: null,
-    loading: true,
-    error: null,
-  };
-}
-
-function updateMetadata(name: string, metadata: TVariableMetadata) {
-  metadataByName.value = {
-    ...metadataByName.value,
-    [name]: metadata,
-  };
-}
-
 function getDefaultAttributesVariableName(datasources?: TSources) {
   const variableName = varnameSelector.value;
   if (!datasources || !variableName || variableName === "-") {
@@ -76,6 +55,51 @@ function getDefaultAttributesVariableName(datasources?: TSources) {
     return null;
   }
   return variableName;
+}
+
+/**
+ * Build variable metadata from the already-indexed datasource without any
+ * network fetch.  Returns null when the indexed data is incomplete (e.g. JSON
+ * indexes that do not pre-populate dtype/shape), in which case a fallback
+ * fetch will be performed.
+ */
+function buildMetadataFromSource(
+  name: string,
+  source: TDataSource
+): TVariableMetadata | null {
+  const dimensionNames = source.attrs?.dimensionNames;
+  const dims = normalizeDimensionNames(dimensionNames, source.shape);
+  const dtype = source.dtype ?? null;
+
+  // If we have neither dtype nor dimension info, we need a fetch.
+  if (!dtype && !Array.isArray(dimensionNames)) {
+    return null;
+  }
+
+  // Strip internal dimension tracking keys that are not user-visible attributes
+  const attrsWithoutDims = Object.fromEntries(
+    Object.entries(source.attrs ?? {}).filter(
+      ([k]) => k !== "_ARRAY_DIMENSIONS" && k !== "dimensionNames"
+    )
+  ) as zarr.Attributes;
+
+  return {
+    attrs: attrsWithoutDims,
+    dimensions: dims,
+    dtype,
+    loading: false,
+    error:
+      !dtype && !Array.isArray(dimensionNames)
+        ? `Could not load variable ${name}`
+        : null,
+  };
+}
+
+function updateMetadata(name: string, metadata: TVariableMetadata) {
+  metadataByName.value = {
+    ...metadataByName.value,
+    [name]: metadata,
+  };
 }
 
 async function loadVariableMetadata(
@@ -121,11 +145,35 @@ async function loadAllVariableMetadata(datasources?: TSources) {
   }
 
   const entries = Object.entries(datasources.levels[0].datasources);
+
+  // First pass: populate from indexed metadata without any network requests
   metadataByName.value = Object.fromEntries(
-    entries.map(([name, source]) => [name, getInitialMetadata(source)])
+    entries.map(([name, source]) => {
+      const cached = buildMetadataFromSource(name, source);
+      return [
+        name,
+        cached ?? {
+          attrs: source.attrs ?? null,
+          dimensions: normalizeDimensionNames(
+            source.attrs?.dimensionNames,
+            source.shape
+          ),
+          dtype: null,
+          loading: true,
+          error: null,
+        },
+      ];
+    })
+  );
+
+  // Second pass: fetch only variables where indexed metadata was incomplete
+  const needsFetch = entries.filter(
+    ([name, source]) => buildMetadataFromSource(name, source) === null
   );
   await Promise.all(
-    entries.map(([name, source]) => loadVariableMetadata(loadId, name, source))
+    needsFetch.map(([name, source]) =>
+      loadVariableMetadata(loadId, name, source)
+    )
   );
 }
 
@@ -138,7 +186,16 @@ const datasourceEntries = computed(() => {
 
 const allVariables = computed(() =>
   datasourceEntries.value.map(([name, source]) => {
-    const metadata = metadataByName.value[name] ?? getInitialMetadata(source);
+    const metadata = metadataByName.value[name] ?? {
+      attrs: source.attrs ?? null,
+      dimensions: normalizeDimensionNames(
+        source.attrs?.dimensionNames,
+        source.shape
+      ),
+      dtype: source.dtype ?? null,
+      loading: !source.dtype && !Array.isArray(source.attrs?.dimensionNames),
+      error: null,
+    };
     return {
       name,
       hidden: source.hidden ?? false,

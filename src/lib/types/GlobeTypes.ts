@@ -57,6 +57,8 @@ export type TDataSource = {
     name: TColorMap;
     inverted: boolean;
   };
+  dtype?: string;
+  shape?: readonly number[];
   hidden?: boolean;
   default_range?: TBounds;
   attrs?: zarr.Attributes;

@@ -1,4 +1,4 @@
-import { useEventListener } from "@vueuse/core";
+import { useDebounceFn, useEventListener } from "@vueuse/core";
 import * as d3 from "d3-geo";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -66,6 +66,7 @@ export function useGridScene(options: UseGridSceneOptions) {
   let baseSurface: THREE.Mesh | undefined = undefined;
   let pickSurface: THREE.Mesh | undefined = undefined;
   let mouseDown = false;
+  let wheelActive = false;
   const raycaster = new THREE.Raycaster();
   const hoveredGeoPoint = shallowRef<THoverGeoPoint | null>(null);
   let lastPointerPosition: { clientX: number; clientY: number } | null = null;
@@ -85,6 +86,11 @@ export function useGridScene(options: UseGridSceneOptions) {
   // the next time anything triggers a render (click, bounds change, etc.).
   let idleFrameCount = 0;
   const IDLE_FRAMES_BEFORE_STOP = 30; // ~500 ms at 60 fps – outlasts any realistic damping
+  const WHEEL_END_DELAY_MS = 120;
+  const debouncedEndWheelInteraction = useDebounceFn(() => {
+    wheelActive = false;
+    animationLoop();
+  }, WHEEL_END_DELAY_MS);
   let targetOffset = 0;
   let isInitialLoad = true;
 
@@ -121,7 +127,7 @@ export function useGridScene(options: UseGridSceneOptions) {
   }
 
   function redraw() {
-    if (store.isRotating) {
+    if (store.isRotating || projectionDragActive || mouseDown || wheelActive) {
       return;
     }
     render();
@@ -753,8 +759,9 @@ export function useGridScene(options: UseGridSceneOptions) {
       canvas.value,
       "wheel",
       () => {
+        wheelActive = true;
         onInteractionStart();
-        onInteractionEnd();
+        debouncedEndWheelInteraction();
       },
       { passive: true }
     );

@@ -6,6 +6,8 @@ import type * as zarr from "zarrita";
 
 import {
   createGeoSampleIndex,
+  createRegularGridHoverIndex,
+  setHoverLookupFromRegularIndex,
   useGridHoverLookup,
 } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
@@ -82,7 +84,7 @@ const {
 const pendingUpdate = ref(false);
 const updatingData = ref(false);
 
-const { setHoverLookupFromIndex, clearHoverLookup } =
+const { setHoverLookupFromIndex, clearHoverLookup, setHoverLookup } =
   useGridHoverLookup(hoveredGeoPoint);
 
 const longitudes = ref(new Float64Array());
@@ -413,6 +415,11 @@ function cleanupMeshes(totalBatches: number) {
   }
   for (const mesh of meshes) {
     mesh.geometry.dispose();
+    const mat = mesh.material as THREE.ShaderMaterial;
+    if (mat.uniforms?.data?.value instanceof THREE.Texture) {
+      mat.uniforms.data.value.dispose();
+    }
+    mat.dispose();
     getScene()?.remove(mesh);
   }
   meshes.length = 0;
@@ -572,12 +579,30 @@ async function getDimensionValues(
   return dimValues;
 }
 
-async function buildHoverSamples(rawData: Float32Array) {
-  const samples: { lat: number; lon: number; value: number }[] = [];
+async function buildAndSetHoverLookup(
+  rawData: Float32Array,
+  fillValue: number,
+  missingValue: number
+) {
+  if (!props.isRotated && !isLatOnly.value) {
+    // Fast path: regular lat/lon grid – binary search on each axis, no sample array needed
+    const hoverIndex = createRegularGridHoverIndex(
+      latitudes.value,
+      longitudes.value,
+      rawData,
+      fillValue,
+      missingValue
+    );
+    setHoverLookupFromRegularIndex(hoverIndex, setHoverLookup);
+    return;
+  }
+
+  // Slow path: rotated grid or lat-only grid – build a flat sample list
   let rotPole: { lat: number; lon: number } | null = null;
   if (props.isRotated) {
     rotPole = await getRotatedNorthPole();
   }
+  const samples: { lat: number; lon: number; value: number }[] = [];
   for (let latIdx = 0; latIdx < latitudes.value.length; latIdx++) {
     if (isLatOnly.value) {
       samples.push({
@@ -600,7 +625,11 @@ async function buildHoverSamples(rawData: Float32Array) {
       }
     }
   }
-  return samples;
+  setHoverLookupFromIndex(
+    createGeoSampleIndex(samples),
+    fillValue,
+    missingValue
+  );
 }
 
 async function buildDimensionConfig(
@@ -652,16 +681,17 @@ async function fetchAndRenderData(
   updateProjectionUniforms(material, helper);
 
   // Update hover lookup
-  const samples = await buildHoverSamples(rawData);
-  setHoverLookupFromIndex(
-    createGeoSampleIndex(samples),
-    fillValue,
-    missingValue
-  );
+  await buildAndSetHoverLookup(rawData, fillValue, missingValue);
 
   updateHistogram(rawData, min, max, missingValue, fillValue);
 
   for (const mesh of meshes) {
+    const oldMaterial = mesh.material as THREE.ShaderMaterial;
+    // Dispose old texture before replacing material to avoid GPU memory leaks
+    if (oldMaterial.uniforms?.data?.value instanceof THREE.Texture) {
+      oldMaterial.uniforms.data.value.dispose();
+    }
+    oldMaterial.dispose();
     mesh.material = material;
     mesh.material.needsUpdate = true;
   }
