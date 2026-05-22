@@ -4,6 +4,8 @@ export type TCatalogEntry = {
   url: string;
   title?: string;
   tag?: string;
+  store?: string;
+  crs?: string;
   description?: string;
 };
 

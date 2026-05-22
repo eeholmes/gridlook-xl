@@ -14,34 +14,60 @@ const emit = defineEmits<{
 
 const searchQuery = ref("");
 
-type SortKey = "default" | "title" | "tag";
-const sortKey = ref<SortKey>("default");
+const filterGrid = ref("all");
+const filterStore = ref("all");
+const filterCrs = ref("all");
+
+const uniqueGridTypes = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.tag).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueStoreTypes = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.store).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueCrsTypes = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.crs).filter((v): v is string => !!v))
+  ).sort()
+);
 
 const filteredAndSortedDatasets = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
 
-  let list = [...props.datasets];
-  if (q) {
-    list = props.datasets.filter((entry) => {
+  return props.datasets.filter((entry) => {
+    if (q) {
       const haystack = [
         entry.title ?? "",
         entry.url,
         entry.tag ?? "",
+        entry.store ?? "",
+        entry.crs ?? "",
         entry.description ?? "",
       ]
         .join(" ")
         .toLowerCase();
-      return haystack.includes(q);
-    });
-  }
+      if (!haystack.includes(q)) {
+        return false;
+      }
+    }
 
-  if (sortKey.value === "title") {
-    list.sort((a, b) => (a.title ?? a.url).localeCompare(b.title ?? b.url));
-  } else if (sortKey.value === "tag") {
-    list.sort((a, b) => (a.tag ?? "").localeCompare(b.tag ?? ""));
-  }
+    if (filterGrid.value !== "all" && entry.tag !== filterGrid.value) {
+      return false;
+    }
+    if (filterStore.value !== "all" && entry.store !== filterStore.value) {
+      return false;
+    }
+    if (filterCrs.value !== "all" && entry.crs !== filterCrs.value) {
+      return false;
+    }
 
-  return list;
+    return true;
+  });
 });
 
 function displayTitle(entry: TCatalogEntry): string {
@@ -71,7 +97,7 @@ function select(entry: TCatalogEntry) {
         </span>
       </div>
       <div
-        class="is-flex is-align-items-center is-justify-content-space-between w-100"
+        class="is-flex is-align-items-center is-justify-content-space-between w-100 catalog-filters"
       >
         <span class="is-size-7 has-text-grey">
           {{ filteredAndSortedDatasets.length }} /
@@ -79,13 +105,33 @@ function select(entry: TCatalogEntry) {
           dataset{{ datasets.length !== 1 ? "s" : "" }}
         </span>
         <div class="field is-grouped is-align-items-center mb-0">
-          <label class="label is-small mr-2 mb-0">Sort</label>
-          <div class="control">
+          <div v-if="uniqueGridTypes.length > 0" class="control">
             <div class="select is-small">
-              <select v-model="sortKey">
-                <option value="default">Default</option>
-                <option value="title">Title</option>
-                <option value="tag">Tag</option>
+              <select v-model="filterGrid" title="Filter by grid type">
+                <option value="all">Grid: All</option>
+                <option v-for="v in uniqueGridTypes" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div v-if="uniqueStoreTypes.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterStore" title="Filter by store type">
+                <option value="all">Store: All</option>
+                <option v-for="v in uniqueStoreTypes" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div v-if="uniqueCrsTypes.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterCrs" title="Filter by CRS">
+                <option value="all">CRS: All</option>
+                <option v-for="v in uniqueCrsTypes" :key="v" :value="v">
+                  {{ v }}
+                </option>
               </select>
             </div>
           </div>
@@ -117,9 +163,17 @@ function select(entry: TCatalogEntry) {
                 {{ displayTitle(entry) }}
               </strong>
             </div>
-            <span v-if="entry.tag" class="tag is-link is-light is-small">
-              {{ entry.tag }}
-            </span>
+            <div class="catalog-entry-tags">
+              <span v-if="entry.tag" class="tag is-link is-light is-small">
+                {{ entry.tag }}
+              </span>
+              <span v-if="entry.store" class="tag is-info is-light is-small">
+                {{ entry.store }}
+              </span>
+              <span v-if="entry.crs" class="tag is-success is-light is-small">
+                {{ entry.crs }}
+              </span>
+            </div>
           </div>
           <p v-if="entry.description" class="help has-text-grey mt-1 mb-0">
             {{ entry.description }}
@@ -196,6 +250,19 @@ function select(entry: TCatalogEntry) {
 
 .catalog-entry-header .tag {
   flex-shrink: 0;
+}
+
+.catalog-entry-tags {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.catalog-filters {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  row-gap: 0.25rem;
 }
 
 .catalog-entry-title {
