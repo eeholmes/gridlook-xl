@@ -465,12 +465,18 @@ export function castDataVarToFloat32(
 /** Earth radius used by the Web Mercator (EPSG:3857) projection. */
 const WEB_MERCATOR_RADIUS = 6378137;
 
-/** Convert a Web Mercator easting (metres) to a WGS-84 longitude (degrees). */
+/**
+ * Convert a Web Mercator easting (metres, valid range: ±20037508.34) to a
+ * WGS-84 longitude in degrees (output range: −180 to +180).
+ */
 export function webMercatorXToLon(x: number): number {
   return (x / WEB_MERCATOR_RADIUS) * (180 / Math.PI);
 }
 
-/** Convert a Web Mercator northing (metres) to a WGS-84 latitude (degrees). */
+/**
+ * Convert a Web Mercator northing (metres, valid range: ±20037508.34) to a
+ * WGS-84 latitude in degrees (output range: approximately −85.05 to +85.05).
+ */
 export function webMercatorYToLat(y: number): number {
   return (Math.atan(Math.sinh(y / WEB_MERCATOR_RADIUS)) * 180) / Math.PI;
 }
@@ -530,8 +536,8 @@ export async function getXYCoordinatesAsLatLon(
   const crsWkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
 
   if (isWebMercatorCRS(crsWkt)) {
-    const xRaw = xData.data as Float32Array;
-    const yRaw = yData.data as Float32Array;
+    const xRaw = castDataVarToFloat32(xData.data);
+    const yRaw = castDataVarToFloat32(yData.data);
     const longitudes = new Float64Array(xRaw.length);
     const latitudes = new Float64Array(yRaw.length);
     for (let i = 0; i < xRaw.length; i++) {

@@ -143,8 +143,14 @@ async function collectArrayEntry(
 
   // When scoped to a group, strip the group prefix so that variable
   // names are relative (e.g. "climate" instead of "0/climate") and
-  // the dataset path carries the level prefix.
-  const varname = groupPrefix ? path.slice(groupPrefix.length) : path.slice(1);
+  // the dataset path carries the level prefix.  groupPrefix is "/0/"
+  // (with surrounding slashes) so slicing by its length removes it cleanly.
+  // The `.replace` normalises any edge cases where the path separator may
+  // leave a leading slash.
+  const rawVarname = groupPrefix
+    ? path.slice(groupPrefix.length)
+    : path.slice(1);
+  const varname = rawVarname.replace(/^\/+/, "");
   return {
     [varname]: {
       store: src,
