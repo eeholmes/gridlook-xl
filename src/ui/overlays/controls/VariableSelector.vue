@@ -99,18 +99,16 @@ const showCurrentVarUnits = computed(() => {
 });
 
 const currentVarLabel = computed(() => {
+  const fallbackName = model.value.split("/").pop() ?? model.value;
   return (
     currentVarAttrs.value?.long_name ??
     currentVarAttrs.value?.standard_name ??
-    "-"
+    fallbackName
   );
 });
 
 const displayedCurrentVarLabel = computed(() => {
-  if (
-    transformMode.value === VALUE_TRANSFORMS.LOG10 &&
-    currentVarLabel.value !== "-"
-  ) {
+  if (transformMode.value === VALUE_TRANSFORMS.LOG10) {
     return `log10 ${currentVarLabel.value}`;
   }
   return currentVarLabel.value;
