@@ -672,7 +672,7 @@ function invPolarStereoPoint(
  * @returns `{ isNorthPole, centralMeridian }` where `centralMeridian`
  *          is in degrees.
  */
-async function getPolarStereoCRSParams(
+export async function getPolarStereoCRSParams(
   datasources: TSources,
   currentVarname: string
 ): Promise<{ isNorthPole: boolean; centralMeridian: number }> {

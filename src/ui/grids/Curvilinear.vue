@@ -20,9 +20,12 @@ import {
   getDataBounds,
   getCRSStringForXYVariable,
   getLatLonData,
+  getPolarStereoCRSParams,
   isPolarStereographicCRS,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
+import { LAND_SEA_MASK_MODES } from "@/lib/layers/landSeaMask.ts";
+import { PROJECTION_TYPES } from "@/lib/projection/projectionUtils.ts";
 import {
   makeGpuProjectedMeshMaterial,
   updateProjectionUniforms,
@@ -63,6 +66,21 @@ const { paramDimIndices, paramDimMinBounds, paramDimMaxBounds } =
 
 const pendingUpdate = ref(false);
 const updatingData = ref(false);
+
+/** True when the loaded dataset uses a polar stereographic CRS. */
+const isPolarStereoData = ref(false);
+/** True when `isPolarStereoData` and the selected projection is incompatible with polar data. */
+const showPolarError = computed(() => {
+  if (!isPolarStereoData.value) {
+    return false;
+  }
+  const mode = projectionMode.value;
+  return (
+    mode !== PROJECTION_TYPES.NEARSIDE_PERSPECTIVE &&
+    mode !== PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT &&
+    mode !== PROJECTION_TYPES.AZIMUTHAL_HYBRID
+  );
+});
 
 let meshes: THREE.Mesh[] = [];
 
@@ -165,7 +183,30 @@ const colormapMaterial = computed(() => {
 
 async function datasourceUpdate() {
   clearHoverLookup();
+  isPolarStereoData.value = false;
   if (props.datasources !== undefined) {
+    // Detect polar stereographic CRS and auto-configure projection/mask.
+    try {
+      const crsStr = await getCRSStringForXYVariable(
+        props.datasources,
+        varnameSelector.value
+      );
+      if (isPolarStereographicCRS(crsStr)) {
+        isPolarStereoData.value = true;
+        const { isNorthPole } = await getPolarStereoCRSParams(
+          props.datasources,
+          varnameSelector.value
+        );
+        // Auto-select azimuthal equidistant centred on the correct pole.
+        store.projectionMode = PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT;
+        store.projectionCenter = { lat: isNorthPole ? 90 : -90, lon: 0 };
+        // The global land/sea mask is not meaningful for a polar domain.
+        store.landSeaMaskChoice = LAND_SEA_MASK_MODES.OFF;
+      }
+    } catch {
+      // CRS lookup may fail for datasets without a CRS variable or group-level
+      // projection attributes.  Treat as a non-polar curvilinear grid.
+    }
     await Promise.all([getData()]);
     updateLandSeaMask();
     updateColormap(meshes);
@@ -798,7 +839,65 @@ defineExpose({ makeSnapshot, toggleRotate, applyCameraPreset });
 </script>
 
 <template>
-  <div ref="box" class="globe_box" tabindex="0" autofocus>
+  <div
+    ref="box"
+    class="globe_box"
+    :class="{ 'globe_box--polar': isPolarStereoData }"
+    tabindex="0"
+    autofocus
+  >
     <canvas ref="canvas" class="globe_canvas"> </canvas>
+    <div v-if="showPolarError" class="polar-overlay">
+      <div class="polar-overlay-box">
+        <p class="polar-overlay-title">Polar stereographic dataset</p>
+        <p class="polar-overlay-body">
+          This dataset uses a polar stereographic coordinate reference system.
+          Please select <strong>Azimuthal Equidistant</strong> or
+          <strong>Nearside Perspective</strong> from the Projection dropdown to
+          display it correctly.
+        </p>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.globe_box--polar {
+  aspect-ratio: 1 / 1;
+  max-height: 100%;
+  max-width: 100%;
+  margin: auto;
+}
+
+.polar-overlay {
+  position: absolute;
+  inset: 0;
+  background: #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.polar-overlay-box {
+  background: rgba(30, 30, 40, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 1.5rem 2rem;
+  max-width: 480px;
+  text-align: center;
+  color: #e0e0e0;
+  pointer-events: none;
+}
+
+.polar-overlay-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.polar-overlay-body {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+</style>

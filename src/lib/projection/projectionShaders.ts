@@ -21,10 +21,6 @@ export const PROJECTION_TYPE_BY_MODE = {
   [PROJECTION_TYPES.CYLINDRICAL_EQUAL_AREA]: 5,
   [PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT]: 6,
   [PROJECTION_TYPES.AZIMUTHAL_HYBRID]: 7,
-  // Polar projections use azimuthal equidistant centred on the pole,
-  // which produces a correct circular polar view matching the land mask.
-  [PROJECTION_TYPES.POLAR_NORTH]: 6,
-  [PROJECTION_TYPES.POLAR_SOUTH]: 6,
 } as const;
 
 export type TProjectionTypeId =
