@@ -613,25 +613,131 @@ export async function getCRSStringForXYVariable(
   return "";
 }
 
-/** Maximum longitude value in degrees (full half-range). */
-const MAX_LONGITUDE_DEGREES = 180;
-/** Maximum latitude value in degrees (full half-range). */
-const MAX_LATITUDE_DEGREES = 90;
+/** WGS-84 semi-major axis in metres, used for inverse polar stereographic. */
+const WGS84_SEMI_MAJOR_AXIS_M = 6378137.0;
+
+/** Minimum distance (m) from the pole below which a point is treated as exactly at the pole. */
+const POLE_PROXIMITY_THRESHOLD_M = 1e-3;
 
 /**
- * Read the 1-D `x` and `y` coordinate arrays from a polar stereographic
- * dataset and normalise them to the [−90, 90] (latitude-like) and
- * [−180, 180] (longitude-like) ranges used by the flat polar display.
+ * Inverse spherical polar stereographic projection.
  *
- * Normalisation is symmetric around the origin so that the pole maps to
- * (0, 0), which aligns with the centre of the flat polar projection.
+ * Converts a single (x, y) point in the projected coordinate system
+ * (units: metres, origin at pole) to geographic (lat, lon) in degrees.
+ *
+ * Derivation: standard spherical inverse stereographic with φ₀ = ±90°.
+ *   ρ = √(x² + y²)
+ *   c = 2·atan(ρ / 2R)
+ *   North: φ = 90 − c·(180/π),  λ = λ₀ + atan2(x, −y)·(180/π)
+ *   South: φ = −90 + c·(180/π), λ = λ₀ + atan2(x,  y)·(180/π)
+ *
+ * A spherical Earth is assumed (k₀ = 1).  For WGS-84-based projections
+ * such as EPSG:3031 (lat_ts = −71°) the coordinate error is < 1° near
+ * the standard parallel, which is acceptable for visualisation.
  */
-export async function getXYCoordinatesForPolarDisplay(
+function invPolarStereoPoint(
+  x: number,
+  y: number,
+  isNorthPole: boolean,
+  centralMeridian: number
+): { lat: number; lon: number } {
+  const R = WGS84_SEMI_MAJOR_AXIS_M;
+  const rho = Math.sqrt(x * x + y * y);
+  if (rho < POLE_PROXIMITY_THRESHOLD_M) {
+    return { lat: isNorthPole ? 90 : -90, lon: centralMeridian };
+  }
+  const c = 2 * Math.atan2(rho, 2 * R);
+  const lat = isNorthPole
+    ? 90 - (c * 180) / Math.PI
+    : -90 + (c * 180) / Math.PI;
+  const lonRaw = isNorthPole
+    ? (Math.atan2(x, -y) * 180) / Math.PI
+    : (Math.atan2(x, y) * 180) / Math.PI;
+  // Apply central-meridian rotation and normalise to (−180, 180].
+  let lon = lonRaw + centralMeridian;
+  if (lon > 180) {
+    lon -= 360;
+  }
+  if (lon <= -180) {
+    lon += 360;
+  }
+  return { lat, lon };
+}
+
+/**
+ * Extract the hemisphere and central meridian from the CRS variable
+ * attached to `currentVarname`.  Falls back to the proj4_params group
+ * attribute when no dedicated CRS variable is present.
+ *
+ * @returns `{ isNorthPole, centralMeridian }` where `centralMeridian`
+ *          is in degrees.
+ */
+async function getPolarStereoCRSParams(
+  datasources: TSources,
+  currentVarname: string
+): Promise<{ isNorthPole: boolean; centralMeridian: number }> {
+  // Try the CRS variable first.
+  try {
+    const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
+    const latOrigin = Number(
+      crs.attrs?.latitude_of_projection_origin ?? crs.attrs?.lat_0 ?? NaN
+    );
+    if (Number.isFinite(latOrigin)) {
+      const centralMeridian = Number(
+        crs.attrs?.straight_vertical_longitude_from_pole ??
+          crs.attrs?.central_meridian ??
+          crs.attrs?.lon_0 ??
+          0
+      );
+      return { isNorthPole: latOrigin >= 0, centralMeridian };
+    }
+  } catch {
+    // No CRS variable or attributes — fall through.
+  }
+
+  // Fall back to parsing the PROJ4 string.
+  try {
+    const source = ZarrDataManager.getDatasetSource(
+      datasources,
+      currentVarname
+    );
+    const group = await ZarrDataManager.getDatasetGroup(source);
+    const proj4 = String(group.attrs?.proj4_params ?? "");
+    if (proj4) {
+      const lat0Match = proj4.match(/\+lat_0=(-?\d+(?:\.\d+)?)/);
+      const lon0Match = proj4.match(/\+lon_0=(-?\d+(?:\.\d+)?)/);
+      const latOrigin = lat0Match ? parseFloat(lat0Match[1]) : NaN;
+      const centralMeridian = lon0Match ? parseFloat(lon0Match[1]) : 0;
+      if (Number.isFinite(latOrigin)) {
+        return { isNorthPole: latOrigin >= 0, centralMeridian };
+      }
+    }
+  } catch {
+    // No group-level attrs — fall through.
+  }
+
+  // Ultimate fallback: assume South Pole (most common for polar datasets).
+  return { isNorthPole: false, centralMeridian: 0 };
+}
+
+/**
+ * Compute proper geographic (lat/lon) 2-D coordinate arrays for a polar
+ * stereographic x/y grid by applying the inverse polar stereographic
+ * projection to every (xᵢ, yⱼ) grid point.
+ *
+ * The returned flat arrays have length `ny × nx` and are laid out in
+ * row-major order (j-major, i-minor), matching the data array layout
+ * expected by the Curvilinear grid renderer.
+ */
+export async function computePolarStereoLatLon2D(
   datasources: TSources,
   currentVarname: string
 ): Promise<{
-  latitudes: Float64Array<ArrayBuffer>;
-  longitudes: Float64Array<ArrayBuffer>;
+  latitudes2D: Float64Array;
+  longitudes2D: Float64Array;
+  ny: number;
+  nx: number;
+  isNorthPole: boolean;
 }> {
   const xRef = ZarrDataManager.resolveVariableReference(
     datasources,
@@ -649,36 +755,32 @@ export async function getXYCoordinatesForPolarDisplay(
     ZarrDataManager.getVariableInfo(yRef.datasource, yRef.variable),
   ]);
 
-  const [xData, yData] = await Promise.all([
+  const [xData, yData, { isNorthPole, centralMeridian }] = await Promise.all([
     ZarrDataManager.getVariableDataFromArray(xArray),
     ZarrDataManager.getVariableDataFromArray(yArray),
+    getPolarStereoCRSParams(datasources, currentVarname),
   ]);
 
-  const xRaw = castDataVarToFloat32(xData.data);
-  const yRaw = castDataVarToFloat32(yData.data);
+  const xRaw = castDataVarToFloat32(xData.data); // 1-D, length nx
+  const yRaw = castDataVarToFloat32(yData.data); // 1-D, length ny
+  const nx = xRaw.length;
+  const ny = yRaw.length;
 
-  // Shared scale factor so the aspect ratio is preserved.
-  let maxExtent = 1;
-  for (const v of xRaw) {
-    const a = Math.abs(v);
-    if (a > maxExtent) {
-      maxExtent = a;
+  const latitudes2D = new Float64Array(ny * nx);
+  const longitudes2D = new Float64Array(ny * nx);
+
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const { lat, lon } = invPolarStereoPoint(
+        xRaw[i],
+        yRaw[j],
+        isNorthPole,
+        centralMeridian
+      );
+      latitudes2D[j * nx + i] = lat;
+      longitudes2D[j * nx + i] = lon;
     }
   }
-  for (const v of yRaw) {
-    const a = Math.abs(v);
-    if (a > maxExtent) {
-      maxExtent = a;
-    }
-  }
 
-  const longitudes = new Float64Array(
-    Float64Array.from(xRaw, (v) => (v / maxExtent) * MAX_LONGITUDE_DEGREES)
-      .buffer
-  );
-  const latitudes = new Float64Array(
-    Float64Array.from(yRaw, (v) => (v / maxExtent) * MAX_LATITUDE_DEGREES)
-      .buffer
-  );
-  return { latitudes, longitudes };
+  return { latitudes2D, longitudes2D, ny, nx, isNorthPole };
 }

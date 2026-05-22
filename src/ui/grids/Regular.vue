@@ -16,21 +16,15 @@ import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
-  getCRSStringForXYVariable,
   getLatLonData,
   getXYCoordinatesAsLatLon,
-  getXYCoordinatesForPolarDisplay,
-  isPolarStereographicCRS,
   isLatitudeName,
   isLongitudeName,
   isXName,
   isYName,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
-import {
-  PROJECTION_TYPES,
-  ProjectionHelper,
-} from "@/lib/projection/projectionUtils.ts";
+import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
 import {
   getColormapScaleOffset,
   makeGpuProjectedTextureMaterial,
@@ -155,15 +149,8 @@ watch(
 
 watch(
   [() => projectionMode.value, () => projectionCenter.value],
-  async () => {
-    // When polar XY data is loaded, a projection switch may enable or disable
-    // rendering; re-run the full datasource update so getDims can re-evaluate
-    // the polar/non-polar condition.
-    if (isPolarXYData.value || polarProjectionRequired.value) {
-      await datasourceUpdate();
-    } else {
-      updateMeshProjectionUniforms();
-    }
+  () => {
+    updateMeshProjectionUniforms();
   },
   { deep: true }
 );
@@ -192,54 +179,13 @@ async function datasourceUpdate() {
 
 const isLatOnly = ref(false);
 const isGridGlobal = ref(false);
-/** Set when the loaded dataset is a polar stereographic XY grid. */
-const isPolarXYData = ref(false);
-/**
- * Set when polar XY data is loaded but the active projection is not a polar
- * one.  Triggers the "switch to polar projection" overlay.
- */
-const polarProjectionRequired = ref(false);
-
-/** Returns true when the projection mode is a polar flat projection. */
-function isPolarProjection(mode: string): boolean {
-  return (
-    mode === PROJECTION_TYPES.POLAR_NORTH ||
-    mode === PROJECTION_TYPES.POLAR_SOUTH
-  );
-}
 
 /**
  * Handles projected x/y coordinate grids inside getDims.
- * Detects polar stereographic CRS versus other projected CRS (e.g. Web Mercator),
- * sets isPolarXYData and polarProjectionRequired, and populates
- * latitudes/longitudes as a side-effect.
+ * Currently only supports Web Mercator (EPSG:3857).
+ * Polar stereographic datasets are routed to Curvilinear.vue instead.
  */
 async function handleXYGridDims(): Promise<void> {
-  const crsStr = await getCRSStringForXYVariable(
-    props.datasources!,
-    varnameSelector.value
-  );
-  if (isPolarStereographicCRS(crsStr)) {
-    isPolarXYData.value = true;
-    if (!isPolarProjection(projectionMode.value)) {
-      // Leave latitudes/longitudes empty so makeGeometry is a no-op; the
-      // overlay will prompt the user to switch projection.
-      polarProjectionRequired.value = true;
-      return;
-    }
-    polarProjectionRequired.value = false;
-    const { latitudes: lats, longitudes: lons } =
-      await getXYCoordinatesForPolarDisplay(
-        props.datasources!,
-        varnameSelector.value
-      );
-    latitudes.value = lats;
-    longitudes.value = lons;
-    return;
-  }
-  // Non-polar projected CRS (e.g. EPSG:3857 Web Mercator).
-  isPolarXYData.value = false;
-  polarProjectionRequired.value = false;
   const { latitudes: lats, longitudes: lons } = await getXYCoordinatesAsLatLon(
     props.datasources!,
     varnameSelector.value
@@ -264,16 +210,14 @@ async function getDims() {
   const lastDim = dimensions[dimensions.length - 1];
   const secondLastDim = dimensions[dimensions.length - 2];
 
-  // Handle xy grids that use projected coordinates (e.g. EPSG:3857 or polar
-  // stereographic).  Polar datasets require a polar projection to display.
+  // Handle xy grids that use projected coordinates (e.g. EPSG:3857 Web Mercator).
+  // Polar stereographic datasets are routed to Curvilinear.vue by the grid
+  // type detector, so they will not reach this code path.
   if (isXName(lastDim) && isYName(secondLastDim)) {
     isLatOnly.value = false;
     await handleXYGridDims();
     return;
   }
-
-  isPolarXYData.value = false;
-  polarProjectionRequired.value = false;
 
   const latOnlyCheck =
     isLatitudeName(lastDim) && !isLongitudeName(secondLastDim);
@@ -807,46 +751,5 @@ defineExpose({
 <template>
   <div ref="box" class="globe_box" tabindex="0" autofocus>
     <canvas ref="canvas" class="globe_canvas"> </canvas>
-    <div v-if="polarProjectionRequired" class="polar-overlay">
-      <div class="polar-overlay-box">
-        <p class="polar-overlay-title">Polar stereographic dataset</p>
-        <p class="polar-overlay-body">
-          This dataset uses a polar stereographic coordinate system. Please
-          select
-          <strong>Polar (North)</strong> or <strong>Polar (South)</strong> from
-          the Projection dropdown to display it.
-        </p>
-      </div>
-    </div>
   </div>
 </template>
-
-<style scoped>
-.polar-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-.polar-overlay-box {
-  background: rgba(30, 30, 40, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  padding: 1.25rem 1.75rem;
-  max-width: 380px;
-  text-align: center;
-  color: #e8e8f0;
-  pointer-events: auto;
-}
-.polar-overlay-title {
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 0.6rem;
-}
-.polar-overlay-body {
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-</style>

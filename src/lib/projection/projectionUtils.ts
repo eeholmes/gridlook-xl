@@ -60,8 +60,17 @@ export class ProjectionHelper {
 
   constructor(type: TProjectionType, center: TProjectionCenter) {
     this.type = type;
-    this.center = center;
     this.isFlat = type !== PROJECTION_TYPES.NEARSIDE_PERSPECTIVE;
+
+    // For polar projections the view centre is always fixed at the pole,
+    // regardless of the user-dragged projection centre.
+    if (type === PROJECTION_TYPES.POLAR_NORTH) {
+      this.center = { lat: 90, lon: 0 };
+    } else if (type === PROJECTION_TYPES.POLAR_SOUTH) {
+      this.center = { lat: -90, lon: 0 };
+    } else {
+      this.center = center;
+    }
 
     this.initializeD3Projection();
   }
@@ -106,9 +115,11 @@ export class ProjectionHelper {
         break;
       case PROJECTION_TYPES.POLAR_NORTH:
       case PROJECTION_TYPES.POLAR_SOUTH:
-        // Flat display using normalised x/y as lat/lon; equirectangular is the
-        // correct flat shader to use for this coordinate range.
-        d3Projection = d3.geoEquirectangular();
+        // Azimuthal equidistant centred on the pole produces a circular
+        // polar view with the correct land-mask alignment.
+        d3Projection = d3
+          .geoAzimuthalEquidistant()
+          .clipAngle(AZIMUTHAL_CLIP_ANGLE);
         break;
       case PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT:
       case PROJECTION_TYPES.AZIMUTHAL_HYBRID:

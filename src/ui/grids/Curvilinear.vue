@@ -15,9 +15,12 @@ import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
+  computePolarStereoLatLon2D,
   createMissingOrFillPredicate,
   getDataBounds,
+  getCRSStringForXYVariable,
   getLatLonData,
+  isPolarStereographicCRS,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import {
@@ -171,20 +174,66 @@ async function datasourceUpdate() {
 
 const BATCH_SIZE = 30;
 
-async function getGrid(
-  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
-  data: Float32Array
-) {
+/**
+ * Resolve the 2-D lat/lon coordinate arrays for a grid variable.
+ * Returns proper geographic coordinates whether the variable uses named
+ * lat/lon arrays (standard curvilinear) or x/y arrays with a polar
+ * stereographic CRS (computed via inverse projection).
+ */
+async function resolveLatLon2D(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+): Promise<{
+  latitudesData: Float64Array;
+  longitudesData: Float64Array;
+  nj: number;
+  ni: number;
+}> {
+  // Detect polar stereographic CRS.
+  let isPolarStereo = false;
+  try {
+    const crsStr = await getCRSStringForXYVariable(
+      props.datasources!,
+      varnameSelector.value
+    );
+    isPolarStereo = isPolarStereographicCRS(crsStr);
+  } catch {
+    // No CRS info available — treat as regular curvilinear.
+  }
+
+  if (isPolarStereo) {
+    const result = await computePolarStereoLatLon2D(
+      props.datasources!,
+      varnameSelector.value
+    );
+    return {
+      latitudesData: result.latitudes2D,
+      longitudesData: result.longitudes2D,
+      nj: result.ny,
+      ni: result.nx,
+    };
+  }
+
   const { latitudes, longitudes } = await getLatLonData(
     datavar,
     props.datasources,
     varnameSelector.value
   );
-  const isMissingOrFill = createMissingOrFillPredicate(datavar);
-
-  const latitudesData = latitudes.data as Float64Array;
-  const longitudesData = longitudes!.data as Float64Array;
   const [nj, ni] = latitudes.shape;
+  return {
+    latitudesData: latitudes.data as Float64Array,
+    longitudesData: longitudes!.data as Float64Array,
+    nj,
+    ni,
+  };
+}
+
+async function getGrid(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
+  data: Float32Array
+) {
+  const { latitudesData, longitudesData, nj, ni } =
+    await resolveLatLon2D(datavar);
+  const isMissingOrFill = createMissingOrFillPredicate(datavar);
 
   // Detect cell orientation by analyzing the winding order of grid cells
   const shouldFlipLongitude = detectLongitudeFlip(
@@ -204,13 +253,7 @@ async function getGrid(
     shouldFlipLongitude
   );
 
-  return {
-    latitudesData,
-    longitudesData,
-    nj,
-    ni,
-    shouldFlipLongitude,
-  };
+  return { latitudesData, longitudesData, nj, ni, shouldFlipLongitude };
 }
 
 function detectLongitudeFlip(

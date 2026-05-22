@@ -2,9 +2,11 @@ import * as zarr from "zarrita";
 
 import { ZarrDataManager } from "./ZarrDataManager.ts";
 import {
+  getCRSStringForXYVariable,
   getLatLonData,
   isLatitudeName,
   isLongitudeName,
+  isPolarStereographicCRS,
   isXName,
   isYName,
 } from "./zarrUtils.ts";
@@ -119,8 +121,27 @@ async function determineGridTypeFromCRS(
     if (checkRegularRotatedGrid(crs)) {
       return GRID_TYPES.REGULAR_ROTATED;
     }
+    // Polar stereographic datasets are routed to CURVILINEAR so that
+    // computePolarStereoLatLon2D can produce proper 2-D lat/lon arrays.
+    if (crs.attrs?.grid_mapping_name === "polar_stereographic") {
+      return GRID_TYPES.CURVILINEAR;
+    }
   } catch {
-    // CRS check failed, return null to continue with other checks
+    // CRS check failed, try full CRS string lookup below.
+  }
+
+  // Also check via the full CRS string lookup which handles PROJ4 fallbacks
+  // written by rioxarray (group-level proj4_params attribute).
+  try {
+    const crsStr = await getCRSStringForXYVariable(
+      datasources,
+      varnameSelector
+    );
+    if (isPolarStereographicCRS(crsStr)) {
+      return GRID_TYPES.CURVILINEAR;
+    }
+  } catch {
+    // No CRS info available.
   }
 
   return null;
