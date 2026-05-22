@@ -18,10 +18,11 @@ import {
   PROJECTION_TYPES,
   type TProjectionType,
 } from "@/lib/projection/projectionUtils.ts";
-import type {
-  TBounds,
-  TModelInfo,
-  TSnapshotOptions,
+import {
+  VALUE_TRANSFORMS,
+  type TBounds,
+  type TModelInfo,
+  type TSnapshotOptions,
 } from "@/lib/types/GlobeTypes.ts";
 import { useUrlParameterStore } from "@/store/paramStore.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
@@ -51,6 +52,7 @@ const {
   varnameSelector,
   landSeaMaskChoice,
   landSeaMaskUseTexture,
+  transformMode,
   varinfo,
   userBoundsLow,
   userBoundsHigh,
@@ -88,6 +90,12 @@ const isMobileView: Ref<boolean> = ref(false);
 
 const dataBounds = computed(() => {
   return varinfo.value?.bounds ?? {};
+});
+
+const colormapScaleLabel = computed(() => {
+  return transformMode.value === VALUE_TRANSFORMS.LOG10
+    ? "log10 scale"
+    : "linear scale";
 });
 
 const currentBounds = computed(() => {
@@ -336,7 +344,10 @@ onMounted(() => {
             <DimensionControl />
           </div>
           <div class="box m-2 p-2">
-            <div class="section-title">Colormap</div>
+            <div class="section-title">
+              Colormap
+              <span class="section-title-scale">{{ colormapScaleLabel }}</span>
+            </div>
             <BoundsControls
               :picked-bounds-mode="pickedBoundsMode"
               :data-bounds="dataBounds"
@@ -395,6 +406,10 @@ onMounted(() => {
   padding-left: 0.5rem !important;
   padding-top: 0.5rem !important;
   color: var(--bulma-grey) !important;
+}
+
+.section-title-scale {
+  text-transform: none !important;
 }
 
 .header-container {

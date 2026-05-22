@@ -106,6 +106,16 @@ const currentVarLabel = computed(() => {
   );
 });
 
+const displayedCurrentVarLabel = computed(() => {
+  if (
+    transformMode.value === VALUE_TRANSFORMS.LOG10 &&
+    currentVarLabel.value !== "-"
+  ) {
+    return `log10 ${currentVarLabel.value}`;
+  }
+  return currentVarLabel.value;
+});
+
 function getOptionLabel(varname: string): string {
   const v = props.modelInfo.vars[varname];
   const label = v?.attrs?.long_name ?? v?.attrs?.standard_name;
@@ -149,7 +159,7 @@ function getOptionLabel(varname: string): string {
       </div>
       <div :key="model" class="has-text-right">
         <span v-word-break>
-          {{ currentVarLabel }}
+          {{ displayedCurrentVarLabel }}
         </span>
         <template v-if="showCurrentVarUnits"> / {{ currentVarUnits }}</template>
       </div>
