@@ -157,7 +157,7 @@ function getOptionLabel(varname: string): string {
           </option>
         </select>
       </div>
-      <div :key="model" class="has-text-right">
+      <div :key="`${model}-${transformMode}`" class="has-text-right">
         <span v-word-break>
           {{ displayedCurrentVarLabel }}
         </span>
