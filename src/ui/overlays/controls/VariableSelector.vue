@@ -22,116 +22,52 @@ const allVisibleVariables = computed(() => {
   return visibleVars;
 });
 
-function getGroupSegments(varname: string) {
-  const parts = varname.split("/");
-  return parts.slice(0, -1);
-}
-
-const maxGroupDepth = computed(() =>
-  allVisibleVariables.value.reduce((depth, varname) => {
-    return Math.max(depth, getGroupSegments(varname).length);
-  }, 0)
-);
-
-const selectedGroupSegments = ref<Array<string | null>>(
-  Array.from({ length: maxGroupDepth.value }, () => null)
-);
-
-function getGroupOptionsForLevel(
-  level: number,
-  selections: Array<string | null>
-) {
-  const options = new Set<string>();
+/**
+ * Collect all unique group paths (everything before the last "/") across all
+ * visible variables and return them sorted.  Variables with no "/" prefix are
+ * root-level and contribute no group path.
+ */
+const allGroupPaths = computed(() => {
+  const paths = new Set<string>();
   for (const varname of allVisibleVariables.value) {
-    const segments = getGroupSegments(varname);
-    if (segments.length <= level) {
-      continue;
-    }
-    const parentMatches = selections
-      .slice(0, level)
-      .every((selected, idx) => !selected || segments[idx] === selected);
-    if (parentMatches) {
-      options.add(segments[level]);
+    const slashIdx = varname.lastIndexOf("/");
+    if (slashIdx > 0) {
+      paths.add(varname.slice(0, slashIdx));
     }
   }
-  return Array.from(options);
-}
-
-watch(
-  () => maxGroupDepth.value,
-  (depth) => {
-    selectedGroupSegments.value = selectedGroupSegments.value
-      .slice(0, depth)
-      .concat(
-        Array.from(
-          { length: Math.max(0, depth - selectedGroupSegments.value.length) },
-          () => null
-        )
-      );
-  },
-  { immediate: true }
-);
-
-const groupOptionsByLevel = computed(() => {
-  const optionsByLevel: string[][] = [];
-  for (let level = 0; level < maxGroupDepth.value; level++) {
-    optionsByLevel[level] = getGroupOptionsForLevel(
-      level,
-      selectedGroupSegments.value
-    );
-  }
-  return optionsByLevel;
+  return Array.from(paths).sort();
 });
 
+/** Whether the dataset has any grouped variables at all. */
+const hasGroups = computed(() => allGroupPaths.value.length > 0);
+
+const selectedGroup = ref<string | null>(allGroupPaths.value[0] ?? null);
+
+// Keep selectedGroup valid when the dataset changes.
 watch(
-  () => [
-    allVisibleVariables.value,
-    maxGroupDepth.value,
-    selectedGroupSegments.value,
-  ],
-  () => {
-    const next = selectedGroupSegments.value.slice(0, maxGroupDepth.value);
-    let changed = next.length !== selectedGroupSegments.value.length;
-    for (let i = 0; i < maxGroupDepth.value; i++) {
-      const options = getGroupOptionsForLevel(i, next);
-      const selected = next[i];
-      if (typeof selected !== "string" || !options.includes(selected)) {
-        next[i] = options[0] ?? null;
-        changed = true;
-      }
-    }
-    if (changed) {
-      selectedGroupSegments.value = next;
+  allGroupPaths,
+  (paths) => {
+    if (paths.length === 0) {
+      selectedGroup.value = null;
+    } else if (!paths.includes(selectedGroup.value ?? "")) {
+      selectedGroup.value = paths[0];
     }
   },
   { immediate: true }
 );
 
-const groupLevels = computed(() =>
-  Array.from({ length: maxGroupDepth.value }, (_, idx) => idx)
-);
-
-function setSelectedGroupSegment(level: number, value: string) {
-  const next = [...selectedGroupSegments.value];
-  next[level] = value || null;
-  for (let idx = level + 1; idx < next.length; idx++) {
-    next[idx] = null;
-  }
-  selectedGroupSegments.value = next;
-}
-
 const variableOptions = computed(() => {
-  if (maxGroupDepth.value === 0) {
+  if (!hasGroups.value) {
     return allVisibleVariables.value;
   }
+  const prefix = selectedGroup.value;
   return allVisibleVariables.value.filter((varname) => {
-    const segments = getGroupSegments(varname);
-    return selectedGroupSegments.value.every((selected, idx) => {
-      if (selected === null) {
-        return true;
-      }
-      return segments[idx] === selected;
-    });
+    const slashIdx = varname.lastIndexOf("/");
+    if (slashIdx <= 0) {
+      // Root-level variable — always included regardless of group selection.
+      return true;
+    }
+    return varname.slice(0, slashIdx) === prefix;
   });
 });
 
@@ -166,35 +102,28 @@ const currentVarLabel = computed(() => {
 function getOptionLabel(varname: string): string {
   const v = props.modelInfo.vars[varname];
   const label = v?.attrs?.long_name ?? v?.attrs?.standard_name;
-  return label ? `${varname} - ${label}` : varname;
+  // Show only the leaf name in the variable dropdown since the group is
+  // already shown separately in the group selector above.
+  const displayName = varname.split("/").pop() ?? varname;
+  return label ? `${displayName} - ${label}` : displayName;
 }
 </script>
 
 <template>
   <div class="column">
     <div class="control">
-      <template v-for="level in groupLevels" :key="`group-${level}`">
-        <label class="is-size-7 has-text-grey" :for="`group-level-${level}`">
-          Group level {{ level + 1 }}
+      <template v-if="hasGroups">
+        <label class="is-size-7 has-text-grey" for="group-selector">
+          Group
         </label>
         <div class="select is-fullwidth mb-2">
           <select
-            :id="`group-level-${level}`"
-            :value="selectedGroupSegments[level] ?? ''"
+            id="group-selector"
+            v-model="selectedGroup"
             class="form-control"
-            :aria-label="`Group level ${level + 1}`"
-            @change="
-              setSelectedGroupSegment(
-                level,
-                ($event.target as HTMLSelectElement).value
-              )
-            "
+            aria-label="Group"
           >
-            <option
-              v-for="group in groupOptionsByLevel[level]"
-              :key="group"
-              :value="group"
-            >
+            <option v-for="group in allGroupPaths" :key="group" :value="group">
               {{ group }}
             </option>
           </select>

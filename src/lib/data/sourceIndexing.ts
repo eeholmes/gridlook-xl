@@ -72,7 +72,10 @@ function isValidVariable(
   const hasExcludedName = EXCLUDED_VAR_PATTERNS.some((pattern) =>
     varname.includes(pattern)
   );
-  const isLatLon = varname === "lat" || varname === "lon";
+  // Check both full name and leaf name (e.g. "0/lat" → leaf "lat") so that
+  // group-prefixed coordinate arrays are also excluded.
+  const leafName = varname.split("/").pop() ?? varname;
+  const isLatLon = leafName === "lat" || leafName === "lon";
 
   return shapeValid && !hasExcludedName && !isLatLon;
 }
@@ -95,45 +98,14 @@ function searchDimensionsAndCoordinates(
   }
 }
 
-/**
- * Returns the path of the first level in a multiscale pyramid (e.g. "0"),
- * or null if the group attributes do not describe a multiscale layout.
- */
-function getMultiscaleLevelPath(attrs: zarr.Attributes): string | null {
-  const multiscales = attrs?.multiscales;
-  if (!Array.isArray(multiscales) || multiscales.length === 0) {
-    return null;
-  }
-  const datasets = multiscales[0]?.datasets;
-  if (!Array.isArray(datasets) || datasets.length === 0) {
-    return null;
-  }
-  const firstPath = datasets[0]?.path;
-  return typeof firstPath === "string" && firstPath.length > 0
-    ? firstPath
-    : null;
-}
-
-function isArrayInGroup(
-  path: zarr.AbsolutePath,
-  kind: "array" | "group",
-  groupPrefix: string | null
-) {
-  if (kind !== "array") {
-    return false;
-  }
-  if (!groupPrefix) {
-    return true;
-  }
-  return path.startsWith(groupPrefix);
+function isArrayKind(_path: zarr.AbsolutePath, kind: "array" | "group") {
+  return kind === "array";
 }
 
 async function collectArrayEntry(
   path: zarr.AbsolutePath,
   root: zarr.Group<zarr.AsyncReadable>,
   src: string,
-  groupPath: string,
-  groupPrefix: string | null,
   dimensions: Set<string>
 ) {
   const variable = await zarr.open(root.resolve(path), {
@@ -141,20 +113,15 @@ async function collectArrayEntry(
   });
   searchDimensionsAndCoordinates(dimensions, variable);
 
-  // When scoped to a group, strip the group prefix so that variable
-  // names are relative (e.g. "climate" instead of "0/climate") and
-  // the dataset path carries the level prefix.  groupPrefix is "/0/"
-  // (with surrounding slashes) so slicing by its length removes it cleanly.
-  // The `.replace` normalises any edge cases where the path separator may
-  // leave a leading slash.
-  const rawVarname = groupPrefix
-    ? path.slice(groupPrefix.length)
-    : path.slice(1);
-  const varname = rawVarname.replace(/^\/+/, "");
+  // Use the full path (minus leading "/") as the variable name so that nested
+  // group paths are preserved (e.g. "0/climate") and the VariableSelector can
+  // expose the level/group hierarchy to the user.  dataset="" means the root
+  // group is used as the base when fetching data.
+  const varname = path.slice(1);
   return {
     [varname]: {
       store: src,
-      dataset: groupPath,
+      dataset: "",
       hidden: !isValidVariable(
         varname,
         variable.shape,
@@ -171,13 +138,11 @@ async function collectArrayEntry(
 async function collectVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string,
-  groupPath: string = ""
+  src: string
 ): Promise<{
   candidates: PromiseSettledResult<Record<string, TDataSource>>[];
   dimensions: Set<string>;
 }> {
-  const groupPrefix = groupPath ? `/${groupPath}/` : null;
   const dimensions = new Set<string>();
   const candidates = await Promise.allSettled(
     store
@@ -189,10 +154,10 @@ async function collectVariables(
         }: {
           path: zarr.AbsolutePath;
           kind: "array" | "group";
-        }) => isArrayInGroup(path, kind, groupPrefix)
+        }) => isArrayKind(path, kind)
       )
       .map(({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
-        collectArrayEntry(path, root, src, groupPath, groupPrefix, dimensions)
+        collectArrayEntry(path, root, src, dimensions)
       )
   );
 
@@ -298,7 +263,10 @@ function mergeDatasourceCandidates(
     .filter((obj) => Object.keys(obj).length > 0)
     .map((obj) => {
       const varname = Object.keys(obj)[0];
-      if (dimensions.has(varname)) {
+      // Also check the leaf name (after the last "/") so that
+      // group-prefixed dimension variables like "0/x" or "0/lat" are hidden.
+      const leafName = varname.split("/").pop() ?? varname;
+      if (dimensions.has(varname) || dimensions.has(leafName)) {
         return { [varname]: { ...obj[varname], hidden: true } };
       }
       return obj;
@@ -309,15 +277,9 @@ function mergeDatasourceCandidates(
 async function processZarrVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string,
-  groupPath: string = ""
+  src: string
 ): Promise<Record<string, TDataSource>> {
-  const { candidates, dimensions } = await collectVariables(
-    store,
-    root,
-    src,
-    groupPath
-  );
+  const { candidates, dimensions } = await collectVariables(store, root, src);
   return mergeDatasourceCandidates(candidates, dimensions);
 }
 
@@ -417,8 +379,7 @@ export async function indexFromZarr(src: string): Promise<TSources> {
       { format: "v2" }
     );
     const root = await zarr.open(store, { kind: "group" });
-    const levelPath = getMultiscaleLevelPath(root.attrs) ?? "";
-    const datasources = await processZarrVariables(store, root, src, levelPath);
+    const datasources = await processZarrVariables(store, root, src);
     return createIndex(
       root.attrs?.title as string,
       datasources,
@@ -432,13 +393,7 @@ export async function indexFromZarr(src: string): Promise<TSources> {
         { format: "v3" }
       );
       const root = await zarr.open(store, { kind: "group" });
-      const levelPath = getMultiscaleLevelPath(root.attrs) ?? "";
-      const datasources = await processZarrVariables(
-        store,
-        root,
-        src,
-        levelPath
-      );
+      const datasources = await processZarrVariables(store, root, src);
       return createIndex(
         root.attrs?.title as string,
         datasources,

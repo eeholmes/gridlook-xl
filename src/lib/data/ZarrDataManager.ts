@@ -330,6 +330,29 @@ export class ZarrDataManager {
     return datasources.levels[0].datasources[varname];
   }
 
+  /**
+   * Walk up the group hierarchy of `currentVarname` looking for `target`
+   * in the sibling or ancestor group.  E.g. for currentVarname "0/climate"
+   * and target "x" this tries "0/x"; for "0/20m/temp" it tries "0/20m/x"
+   * then "0/x".  Returns null when no match is found.
+   */
+  private static resolveInParentGroups(
+    levelDatasources: Record<string, TDatasetSource>,
+    currentVarname: string,
+    normalizedTarget: string
+  ): TResolvedVariableReference | null {
+    const currentParts = this.normalizeVariablePath(currentVarname).split("/");
+    for (let i = currentParts.length - 1; i > 0; i--) {
+      const groupPrefix = currentParts.slice(0, i).join("/");
+      const candidate = `${groupPrefix}/${normalizedTarget}`;
+      const match = levelDatasources[candidate];
+      if (match) {
+        return { datasource: match, variable: candidate };
+      }
+    }
+    return null;
+  }
+
   static resolveVariableReference(
     datasources: TSources,
     currentVarname: string,
@@ -339,10 +362,16 @@ export class ZarrDataManager {
     const normalizedTarget = this.normalizeVariablePath(targetVarname);
     const directMatch = levelDatasources[normalizedTarget];
     if (directMatch) {
-      return {
-        datasource: directMatch,
-        variable: normalizedTarget,
-      };
+      return { datasource: directMatch, variable: normalizedTarget };
+    }
+
+    const groupMatch = this.resolveInParentGroups(
+      levelDatasources,
+      currentVarname,
+      normalizedTarget
+    );
+    if (groupMatch) {
+      return groupMatch;
     }
 
     const currentSource = this.getDatasetSource(datasources, currentVarname);
@@ -368,16 +397,10 @@ export class ZarrDataManager {
     );
     if (sameDatasetMatch) {
       const [matchedVarname, matchedSource] = sameDatasetMatch;
-      return {
-        datasource: matchedSource,
-        variable: matchedVarname,
-      };
+      return { datasource: matchedSource, variable: matchedVarname };
     }
 
-    return {
-      datasource: currentSource,
-      variable: normalizedTarget,
-    };
+    return { datasource: currentSource, variable: normalizedTarget };
   }
 
   static async getDimensionNames(datasources: TSources, varname: string) {
