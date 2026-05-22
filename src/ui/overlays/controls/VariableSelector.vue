@@ -2,8 +2,7 @@
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 
-import type { TModelInfo } from "@/lib/types/GlobeTypes.js";
-import { VALUE_TRANSFORMS } from "@/lib/types/GlobeTypes.ts";
+import { VALUE_TRANSFORMS, type TModelInfo } from "@/lib/types/GlobeTypes.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
 
 const model = defineModel<string>({ required: true });
