@@ -209,7 +209,10 @@ function isPolarProjection(mode: string): boolean {
 }
 
 /**
- * longitudes, isPolarXYData, and polarProjectionRequired as a side-effect.
+ * Handles projected x/y coordinate grids inside getDims.
+ * Detects polar stereographic CRS versus other projected CRS (e.g. Web Mercator),
+ * sets isPolarXYData and polarProjectionRequired, and populates
+ * latitudes/longitudes as a side-effect.
  */
 async function handleXYGridDims(): Promise<void> {
   const crsStr = await getCRSStringForXYVariable(

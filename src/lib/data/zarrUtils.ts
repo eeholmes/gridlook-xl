@@ -613,6 +613,11 @@ export async function getCRSStringForXYVariable(
   return "";
 }
 
+/** Maximum longitude value in degrees (full half-range). */
+const MAX_LONGITUDE_DEGREES = 180;
+/** Maximum latitude value in degrees (full half-range). */
+const MAX_LATITUDE_DEGREES = 90;
+
 /**
  * Read the 1-D `x` and `y` coordinate arrays from a polar stereographic
  * dataset and normalise them to the [−90, 90] (latitude-like) and
@@ -668,10 +673,12 @@ export async function getXYCoordinatesForPolarDisplay(
   }
 
   const longitudes = new Float64Array(
-    Float64Array.from(xRaw, (v) => (v / maxExtent) * 180).buffer
+    Float64Array.from(xRaw, (v) => (v / maxExtent) * MAX_LONGITUDE_DEGREES)
+      .buffer
   );
   const latitudes = new Float64Array(
-    Float64Array.from(yRaw, (v) => (v / maxExtent) * 90).buffer
+    Float64Array.from(yRaw, (v) => (v / maxExtent) * MAX_LATITUDE_DEGREES)
+      .buffer
   );
   return { latitudes, longitudes };
 }
