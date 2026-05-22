@@ -17,7 +17,7 @@ export default [
     },
   },
   {
-    ignores: ["src/components/js/*.js", "node_modules", "dist"],
+    ignores: ["src/components/js/*.js", "node_modules", "dist", "tests/notes"],
   },
 
   // js
