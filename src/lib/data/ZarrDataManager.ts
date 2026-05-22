@@ -291,6 +291,31 @@ export class ZarrDataManager {
     if (datavar.attrs?.grid_mapping) {
       return String(datavar.attrs.grid_mapping).split(":")[0];
     }
+
+    // Also search auxiliary coordinates (e.g. "spatial_ref" written by
+    // rioxarray / xarray-spatial) for a variable carrying CRS metadata.
+    if (datavar.attrs?.coordinates) {
+      const coords = String(datavar.attrs.coordinates).split(" ");
+      for (const coord of coords) {
+        try {
+          const resolved = this.resolveVariableReference(
+            datasources,
+            varname,
+            coord
+          );
+          const coordVar = await this.getVariableInfo(
+            resolved.datasource,
+            resolved.variable
+          );
+          if (coordVar.attrs?.crs_wkt || coordVar.attrs?.grid_mapping_name) {
+            return coord;
+          }
+        } catch {
+          // Not a CRS variable or not found — continue scanning.
+        }
+      }
+    }
+
     const group = await ZarrDataManager.getDatasetGroup(source);
     if (group.attrs?.grid_mapping) {
       return String(group.attrs.grid_mapping).split(":")[0];
@@ -305,6 +330,34 @@ export class ZarrDataManager {
     return datasources.levels[0].datasources[varname];
   }
 
+  /**
+   * Walk up the group hierarchy of `currentVarname` looking for `target`
+   * in the sibling or ancestor group.  E.g. for currentVarname "0/climate"
+   * and target "x" this tries "0/x"; for "0/20m/temp" it tries "0/20m/x"
+   * then "0/x".  Root-level lookup (bare "x") is already handled by the
+   * directMatch check in resolveVariableReference before this is called.
+   * Returns null when no match is found.
+   */
+  private static resolveInParentGroups(
+    levelDatasources: Record<string, TDatasetSource>,
+    currentVarname: string,
+    normalizedTarget: string
+  ): TResolvedVariableReference | null {
+    const currentParts = this.normalizeVariablePath(currentVarname).split("/");
+    // Walk from the immediate parent group up to the top-most named group.
+    // i = currentParts.length-1 → nearest ancestor, i = 1 → top-level group.
+    // Root level (i = 0) is covered by the directMatch above.
+    for (let i = currentParts.length - 1; i >= 1; i--) {
+      const groupPrefix = currentParts.slice(0, i).join("/");
+      const candidate = `${groupPrefix}/${normalizedTarget}`;
+      const match = levelDatasources[candidate];
+      if (match) {
+        return { datasource: match, variable: candidate };
+      }
+    }
+    return null;
+  }
+
   static resolveVariableReference(
     datasources: TSources,
     currentVarname: string,
@@ -314,10 +367,16 @@ export class ZarrDataManager {
     const normalizedTarget = this.normalizeVariablePath(targetVarname);
     const directMatch = levelDatasources[normalizedTarget];
     if (directMatch) {
-      return {
-        datasource: directMatch,
-        variable: normalizedTarget,
-      };
+      return { datasource: directMatch, variable: normalizedTarget };
+    }
+
+    const groupMatch = this.resolveInParentGroups(
+      levelDatasources,
+      currentVarname,
+      normalizedTarget
+    );
+    if (groupMatch) {
+      return groupMatch;
     }
 
     const currentSource = this.getDatasetSource(datasources, currentVarname);
@@ -343,16 +402,10 @@ export class ZarrDataManager {
     );
     if (sameDatasetMatch) {
       const [matchedVarname, matchedSource] = sameDatasetMatch;
-      return {
-        datasource: matchedSource,
-        variable: matchedVarname,
-      };
+      return { datasource: matchedSource, variable: matchedVarname };
     }
 
-    return {
-      datasource: currentSource,
-      variable: normalizedTarget,
-    };
+    return { datasource: currentSource, variable: normalizedTarget };
   }
 
   static async getDimensionNames(datasources: TSources, varname: string) {

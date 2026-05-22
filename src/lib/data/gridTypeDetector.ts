@@ -1,7 +1,13 @@
 import * as zarr from "zarrita";
 
 import { ZarrDataManager } from "./ZarrDataManager.ts";
-import { getLatLonData, isLatitudeName, isLongitudeName } from "./zarrUtils.ts";
+import {
+  getLatLonData,
+  isLatitudeName,
+  isLongitudeName,
+  isXName,
+  isYName,
+} from "./zarrUtils.ts";
 
 import type { TSources } from "@/lib/types/GlobeTypes.ts";
 
@@ -94,6 +100,11 @@ function checkRegularGridFromDimensions(dimensions: string[]): boolean {
   return hasLatLon || hasLatOnly;
 }
 
+// Check if grid uses projected x/y coordinates (e.g. EPSG:3857 with spatial_ref)
+function checkXYGridFromDimensions(dimensions: string[]): boolean {
+  return dimensions.some(isXName) && dimensions.some(isYName);
+}
+
 // Attempt to determine grid type from CRS information
 async function determineGridTypeFromCRS(
   datasources: TSources,
@@ -179,6 +190,12 @@ export async function getGridType(
       varnameSelector
     );
     if (checkRegularGridFromDimensions(dimensions)) {
+      return GRID_TYPES.REGULAR;
+    }
+
+    // Projected xy grids (e.g. EPSG:3857 with spatial_ref): handled as
+    // regular grids after converting x/y coordinates to lat/lon.
+    if (checkXYGridFromDimensions(dimensions)) {
       return GRID_TYPES.REGULAR;
     }
 

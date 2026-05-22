@@ -72,7 +72,10 @@ function isValidVariable(
   const hasExcludedName = EXCLUDED_VAR_PATTERNS.some((pattern) =>
     varname.includes(pattern)
   );
-  const isLatLon = varname === "lat" || varname === "lon";
+  // Check both full name and leaf name (e.g. "0/lat" → leaf "lat") so that
+  // group-prefixed coordinate arrays are also excluded.
+  const leafName = varname.split("/").pop() ?? varname;
+  const isLatLon = leafName === "lat" || leafName === "lon";
 
   return shapeValid && !hasExcludedName && !isLatLon;
 }
@@ -95,6 +98,43 @@ function searchDimensionsAndCoordinates(
   }
 }
 
+function isArrayEntry(kind: "array" | "group") {
+  return kind === "array";
+}
+
+async function collectArrayEntry(
+  path: zarr.AbsolutePath,
+  root: zarr.Group<zarr.AsyncReadable>,
+  src: string,
+  dimensions: Set<string>
+) {
+  const variable = await zarr.open(root.resolve(path), {
+    kind: "array",
+  });
+  searchDimensionsAndCoordinates(dimensions, variable);
+
+  // Use the full path (minus leading "/") as the variable name so that nested
+  // group paths are preserved (e.g. "0/climate") and the VariableSelector can
+  // expose the level/group hierarchy to the user.  dataset="" means the root
+  // group is used as the base when fetching data.
+  const varname = path.slice(1);
+  return {
+    [varname]: {
+      store: src,
+      dataset: "",
+      hidden: !isValidVariable(
+        varname,
+        variable.shape,
+        variable.dimensionNames as string[]
+      ),
+      attrs: {
+        ...variable.attrs,
+        dimensionNames: variable.dimensionNames,
+      },
+    },
+  };
+}
+
 async function collectVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
@@ -107,39 +147,12 @@ async function collectVariables(
   const candidates = await Promise.allSettled(
     store
       .contents()
-      .map(
-        async ({
-          path,
-          kind,
-        }: {
-          path: zarr.AbsolutePath;
-          kind: "array" | "group";
-        }) => {
-          if (kind !== "array") {
-            return {};
-          }
-          const variable = await zarr.open(root.resolve(path), {
-            kind: "array",
-          });
-          searchDimensionsAndCoordinates(dimensions, variable);
-
-          const varname = path.slice(1);
-          return {
-            [varname]: {
-              store: src,
-              dataset: "",
-              hidden: !isValidVariable(
-                varname,
-                variable.shape,
-                variable.dimensionNames as string[]
-              ),
-              attrs: {
-                ...variable.attrs,
-                dimensionNames: variable.dimensionNames,
-              },
-            },
-          };
-        }
+      .filter(
+        ({ kind }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
+          isArrayEntry(kind)
+      )
+      .map(({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
+        collectArrayEntry(path, root, src, dimensions)
       )
   );
 
@@ -245,7 +258,10 @@ function mergeDatasourceCandidates(
     .filter((obj) => Object.keys(obj).length > 0)
     .map((obj) => {
       const varname = Object.keys(obj)[0];
-      if (dimensions.has(varname)) {
+      // Also check the leaf name (after the last "/") so that
+      // group-prefixed dimension variables like "0/x" or "0/lat" are hidden.
+      const leafName = varname.split("/").pop() ?? varname;
+      if (dimensions.has(varname) || dimensions.has(leafName)) {
         return { [varname]: { ...obj[varname], hidden: true } };
       }
       return obj;

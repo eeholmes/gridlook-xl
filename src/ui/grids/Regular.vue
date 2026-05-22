@@ -17,8 +17,11 @@ import {
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
+  getXYCoordinatesAsLatLon,
   isLatitudeName,
   isLongitudeName,
+  isXName,
+  isYName,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
@@ -191,6 +194,17 @@ async function getDims() {
 
   const lastDim = dimensions[dimensions.length - 1];
   const secondLastDim = dimensions[dimensions.length - 2];
+
+  // Handle xy grids that use projected coordinates (e.g. EPSG:3857 with
+  // a spatial_ref CRS variable).  Convert x/y to lat/lon before rendering.
+  if (isXName(lastDim) && isYName(secondLastDim)) {
+    isLatOnly.value = false;
+    const { latitudes: lats, longitudes: lons } =
+      await getXYCoordinatesAsLatLon(props.datasources!, varnameSelector.value);
+    latitudes.value = lats;
+    longitudes.value = lons;
+    return;
+  }
 
   const latOnlyCheck =
     isLatitudeName(lastDim) && !isLongitudeName(secondLastDim);

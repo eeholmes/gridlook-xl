@@ -95,6 +95,14 @@ export function isLongitudeName(name: string) {
   return name === "lon" || name === "longitude" || name === "rlon";
 }
 
+export function isXName(name: string) {
+  return name === "x";
+}
+
+export function isYName(name: string) {
+  return name === "y";
+}
+
 export function isLatitudeVariable(name: string, attrs: unknown) {
   return (
     (hasUnits(attrs) && !!attrs.units.match(/degrees?_?(N|north)/)) ||
@@ -447,5 +455,102 @@ export function castDataVarToFloat32(
         : (rawData.constructor?.name ?? typeof rawData);
   throw new TypeError(
     `Unsupported data type for Float32 texture conversion. Expected a numeric typed array or array-like input, received: ${receivedType}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// XY (projected) coordinate support
+// ---------------------------------------------------------------------------
+
+/** Earth radius used by the Web Mercator (EPSG:3857) projection. */
+const WEB_MERCATOR_RADIUS = 6378137;
+
+/**
+ * Convert a Web Mercator easting (metres, valid range: ±20037508.34) to a
+ * WGS-84 longitude in degrees (output range: −180 to +180).
+ */
+export function webMercatorXToLon(x: number): number {
+  return (x / WEB_MERCATOR_RADIUS) * (180 / Math.PI);
+}
+
+/**
+ * Convert a Web Mercator northing (metres, valid range: ±20037508.34) to a
+ * WGS-84 latitude in degrees (output range: approximately −85.05 to +85.05).
+ */
+export function webMercatorYToLat(y: number): number {
+  return (Math.atan(Math.sinh(y / WEB_MERCATOR_RADIUS)) * 180) / Math.PI;
+}
+
+/**
+ * Returns true when the WKT string describes the Web Mercator projection
+ * (EPSG:3857 / Pseudo-Mercator).
+ */
+export function isWebMercatorCRS(crsWkt: string): boolean {
+  return (
+    crsWkt.includes('AUTHORITY["EPSG","3857"]') ||
+    crsWkt.includes("AUTHORITY['EPSG','3857']") ||
+    crsWkt.toLowerCase().includes("pseudo-mercator") ||
+    crsWkt.includes("+proj=merc")
+  );
+}
+
+/**
+ * Read the 1-D `x` and `y` coordinate arrays from a dataset that uses a
+ * projected CRS (e.g. EPSG:3857 / Web Mercator) and convert them to
+ * WGS-84 latitude / longitude arrays suitable for the Regular grid renderer.
+ *
+ * The CRS is inferred from the `spatial_ref` (or equivalent) variable that is
+ * referenced in the data variable's `coordinates` attribute.
+ *
+ * @throws {Error} when the CRS is not currently supported.
+ */
+export async function getXYCoordinatesAsLatLon(
+  datasources: TSources,
+  currentVarname: string
+): Promise<{
+  latitudes: Float64Array<ArrayBuffer>;
+  longitudes: Float64Array<ArrayBuffer>;
+}> {
+  const xRef = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    "x"
+  );
+  const yRef = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    "y"
+  );
+
+  const [xArray, yArray] = await Promise.all([
+    ZarrDataManager.getVariableInfo(xRef.datasource, xRef.variable),
+    ZarrDataManager.getVariableInfo(yRef.datasource, yRef.variable),
+  ]);
+
+  const [xData, yData] = await Promise.all([
+    ZarrDataManager.getVariableDataFromArray(xArray),
+    ZarrDataManager.getVariableDataFromArray(yArray),
+  ]);
+
+  const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
+  const crsWkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
+
+  if (isWebMercatorCRS(crsWkt)) {
+    const xRaw = castDataVarToFloat32(xData.data);
+    const yRaw = castDataVarToFloat32(yData.data);
+    const longitudes = new Float64Array(xRaw.length);
+    const latitudes = new Float64Array(yRaw.length);
+    for (let i = 0; i < xRaw.length; i++) {
+      longitudes[i] = webMercatorXToLon(xRaw[i]);
+    }
+    for (let i = 0; i < yRaw.length; i++) {
+      latitudes[i] = webMercatorYToLat(yRaw[i]);
+    }
+    return { latitudes, longitudes };
+  }
+
+  throw new Error(
+    `Unsupported projected CRS for xy grid. Only Web Mercator (EPSG:3857) is ` +
+      `currently supported. CRS: ${crsWkt.slice(0, 120)}`
   );
 }
