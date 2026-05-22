@@ -41,7 +41,7 @@ const allGroupPaths = computed(() => {
 /** Whether the dataset has any grouped variables at all. */
 const hasGroups = computed(() => allGroupPaths.value.length > 0);
 
-const selectedGroup = ref<string | null>(allGroupPaths.value[0] ?? null);
+const selectedGroup = ref<string | null>(null);
 
 // Keep selectedGroup valid when the dataset changes.
 watch(

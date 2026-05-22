@@ -98,7 +98,7 @@ function searchDimensionsAndCoordinates(
   }
 }
 
-function isArrayKind(_path: zarr.AbsolutePath, kind: "array" | "group") {
+function isArrayEntry(kind: "array" | "group") {
   return kind === "array";
 }
 
@@ -148,13 +148,8 @@ async function collectVariables(
     store
       .contents()
       .filter(
-        ({
-          path,
-          kind,
-        }: {
-          path: zarr.AbsolutePath;
-          kind: "array" | "group";
-        }) => isArrayKind(path, kind)
+        ({ kind }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
+          isArrayEntry(kind)
       )
       .map(({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
         collectArrayEntry(path, root, src, dimensions)
