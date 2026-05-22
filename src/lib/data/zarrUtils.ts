@@ -1,3 +1,4 @@
+import proj4 from "proj4";
 import * as zarr from "zarrita";
 
 import { ZarrDataManager } from "./ZarrDataManager.ts";
@@ -494,23 +495,90 @@ export function isWebMercatorCRS(crsWkt: string): boolean {
   );
 }
 
-/**
- * Read the 1-D `x` and `y` coordinate arrays from a dataset that uses a
- * projected CRS (e.g. EPSG:3857 / Web Mercator) and convert them to
- * WGS-84 latitude / longitude arrays suitable for the Regular grid renderer.
- *
- * The CRS is inferred from the `spatial_ref` (or equivalent) variable that is
- * referenced in the data variable's `coordinates` attribute.
- *
- * @throws {Error} when the CRS is not currently supported.
- */
-export async function getXYCoordinatesAsLatLon(
+export type TProjectedXYCoordinates =
+  | {
+      displayType: "regular";
+      latitudes: Float64Array;
+      longitudes: Float64Array;
+    }
+  | {
+      displayType: "curvilinear";
+      xCoordinates: Float64Array;
+      yCoordinates: Float64Array;
+      projection: string;
+    };
+
+function normalizeLongitude(lon: number) {
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
+}
+
+function isProjectedCurvilinearCRS(crsText: string, crsAttrs: zarr.Attributes) {
+  return (
+    crsAttrs["grid_mapping_name"] === "polar_stereographic" ||
+    crsText.includes('AUTHORITY["EPSG","3031"]') ||
+    crsText.includes("AUTHORITY['EPSG','3031']") ||
+    crsText.includes('AUTHORITY["EPSG","3413"]') ||
+    crsText.includes("AUTHORITY['EPSG','3413']") ||
+    crsText.toLowerCase().includes("polar_stereographic") ||
+    crsText.includes("+proj=stere") ||
+    crsText.includes("EPSG:3031") ||
+    crsText.includes("EPSG:3413")
+  );
+}
+
+async function getProjectedCRSAttributes(
   datasources: TSources,
   currentVarname: string
-): Promise<{
-  latitudes: Float64Array<ArrayBuffer>;
-  longitudes: Float64Array<ArrayBuffer>;
-}> {
+) {
+  const source = ZarrDataManager.getDatasetSource(datasources, currentVarname);
+
+  let groupAttrs: zarr.Attributes = {};
+  try {
+    const group = await ZarrDataManager.getDatasetGroup(source);
+    groupAttrs = group.attrs ?? {};
+  } catch {
+    // Ignore group metadata lookup failures and fall back to CRS variable lookup.
+  }
+
+  let crsAttrs: zarr.Attributes = {};
+  try {
+    const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
+    crsAttrs = crs.attrs ?? {};
+  } catch {
+    // Some projected xy datasets keep CRS metadata only on the group attrs.
+  }
+
+  return {
+    ...groupAttrs,
+    ...crsAttrs,
+  };
+}
+
+function getProjectedCRSText(crsAttrs: zarr.Attributes) {
+  return String(
+    crsAttrs.proj4 ??
+      crsAttrs.proj4_params ??
+      crsAttrs.crs_wkt ??
+      crsAttrs.spatial_ref ??
+      ""
+  );
+}
+
+export function createProjectedCoordinateTransformer(projection: string) {
+  const transformer = proj4(projection, "WGS84");
+  return (x: number, y: number) => {
+    const [lon, lat] = transformer.forward([x, y]);
+    return {
+      lat,
+      lon: normalizeLongitude(lon),
+    };
+  };
+}
+
+async function getProjectedXYAxes(
+  datasources: TSources,
+  currentVarname: string
+) {
   const xRef = ZarrDataManager.resolveVariableReference(
     datasources,
     currentVarname,
@@ -532,25 +600,80 @@ export async function getXYCoordinatesAsLatLon(
     ZarrDataManager.getVariableDataFromArray(yArray),
   ]);
 
-  const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
-  const crsWkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
+  return {
+    xCoordinates: new Float64Array(castDataVarToFloat32(xData.data)),
+    yCoordinates: new Float64Array(castDataVarToFloat32(yData.data)),
+  };
+}
+
+function getWebMercatorCoordinates(
+  xCoordinates: Float64Array,
+  yCoordinates: Float64Array
+) {
+  const longitudes = new Float64Array(xCoordinates.length);
+  const latitudes = new Float64Array(yCoordinates.length);
+  for (let i = 0; i < xCoordinates.length; i++) {
+    longitudes[i] = webMercatorXToLon(xCoordinates[i]);
+  }
+  for (let i = 0; i < yCoordinates.length; i++) {
+    latitudes[i] = webMercatorYToLat(yCoordinates[i]);
+  }
+  return { displayType: "regular" as const, latitudes, longitudes };
+}
+
+function getCurvilinearProjectedCoordinates(
+  crsWkt: string,
+  xCoordinates: Float64Array,
+  yCoordinates: Float64Array
+) {
+  const projection = crsWkt.trim();
+  if (!projection) {
+    throw new Error("Projected xy grid is missing a usable CRS definition");
+  }
+
+  return {
+    displayType: "curvilinear" as const,
+    xCoordinates,
+    yCoordinates,
+    projection,
+  };
+}
+
+/**
+ * Read the 1-D `x` and `y` coordinate arrays from a dataset that uses a
+ * projected CRS (e.g. EPSG:3857 / Web Mercator) and convert them to
+ * WGS-84 latitude / longitude arrays suitable for the Regular grid renderer.
+ *
+ * The CRS is inferred from the `spatial_ref` (or equivalent) variable that is
+ * referenced in the data variable's `coordinates` attribute.
+ *
+ * @throws {Error} when the CRS is not currently supported.
+ */
+export async function getProjectedCoordinatesAsLatLon(
+  datasources: TSources,
+  currentVarname: string
+): Promise<TProjectedXYCoordinates> {
+  const { xCoordinates, yCoordinates } = await getProjectedXYAxes(
+    datasources,
+    currentVarname
+  );
+  const crsAttrs = await getProjectedCRSAttributes(datasources, currentVarname);
+  const crsWkt = getProjectedCRSText(crsAttrs);
 
   if (isWebMercatorCRS(crsWkt)) {
-    const xRaw = castDataVarToFloat32(xData.data);
-    const yRaw = castDataVarToFloat32(yData.data);
-    const longitudes = new Float64Array(xRaw.length);
-    const latitudes = new Float64Array(yRaw.length);
-    for (let i = 0; i < xRaw.length; i++) {
-      longitudes[i] = webMercatorXToLon(xRaw[i]);
-    }
-    for (let i = 0; i < yRaw.length; i++) {
-      latitudes[i] = webMercatorYToLat(yRaw[i]);
-    }
-    return { latitudes, longitudes };
+    return getWebMercatorCoordinates(xCoordinates, yCoordinates);
+  }
+
+  if (isProjectedCurvilinearCRS(crsWkt, crsAttrs)) {
+    return getCurvilinearProjectedCoordinates(
+      crsWkt,
+      xCoordinates,
+      yCoordinates
+    );
   }
 
   throw new Error(
-    `Unsupported projected CRS for xy grid. Only Web Mercator (EPSG:3857) is ` +
-      `currently supported. CRS: ${crsWkt.slice(0, 120)}`
+    `Unsupported projected CRS for xy grid. Supported CRSs currently include ` +
+      `Web Mercator (EPSG:3857) and polar stereographic grids. CRS: ${crsWkt.slice(0, 120)}`
   );
 }

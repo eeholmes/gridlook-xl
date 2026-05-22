@@ -15,9 +15,10 @@ import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
+  createProjectedCoordinateTransformer,
   getDataBounds,
   getLatLonData,
-  getXYCoordinatesAsLatLon,
+  getProjectedCoordinatesAsLatLon,
   isLatitudeName,
   isLongitudeName,
   isXName,
@@ -88,8 +89,15 @@ const updatingData = ref(false);
 const { setHoverLookupFromIndex, clearHoverLookup } =
   useGridHoverLookup(hoveredGeoPoint);
 
-const longitudes = ref(new Float64Array());
-const latitudes = ref(new Float64Array());
+type TProjectedXYGrid = {
+  xCoordinates: Float64Array;
+  yCoordinates: Float64Array;
+  projection: string;
+};
+
+const longitudes = ref<Float64Array>(new Float64Array());
+const latitudes = ref<Float64Array>(new Float64Array());
+const projectedXYGrid = ref<TProjectedXYGrid | null>(null);
 
 const BATCH_SIZE = 60;
 let meshes: THREE.Mesh[] = [];
@@ -194,15 +202,29 @@ async function getDims() {
 
   const lastDim = dimensions[dimensions.length - 1];
   const secondLastDim = dimensions[dimensions.length - 2];
+  projectedXYGrid.value = null;
 
   // Handle xy grids that use projected coordinates (e.g. EPSG:3857 with
   // a spatial_ref CRS variable).  Convert x/y to lat/lon before rendering.
   if (isXName(lastDim) && isYName(secondLastDim)) {
     isLatOnly.value = false;
-    const { latitudes: lats, longitudes: lons } =
-      await getXYCoordinatesAsLatLon(props.datasources!, varnameSelector.value);
-    latitudes.value = lats;
-    longitudes.value = lons;
+    const projectedCoordinates = await getProjectedCoordinatesAsLatLon(
+      props.datasources!,
+      varnameSelector.value
+    );
+    if (projectedCoordinates.displayType === "curvilinear") {
+      projectedXYGrid.value = {
+        xCoordinates: projectedCoordinates.xCoordinates,
+        yCoordinates: projectedCoordinates.yCoordinates,
+        projection: projectedCoordinates.projection,
+      };
+      latitudes.value = new Float64Array();
+      longitudes.value = new Float64Array();
+      return;
+    }
+
+    latitudes.value = projectedCoordinates.latitudes;
+    longitudes.value = projectedCoordinates.longitudes;
     return;
   }
 
@@ -273,70 +295,32 @@ function isLongitudeGlobal(longitudes: Float64Array): boolean {
   return span + avgDelta > 359.5;
 }
 
-/**
- * Generates vertices, UVs, and lat/lon coordinates for a grid.
- *
- * For GPU projection, we store lat/lon as vertex attributes and use
- * placeholder positions (0,0,0) that will be computed in the vertex shader.
- * We also compute initial positions for the current projection to avoid
- * a flash of incorrect geometry on first render.
- */
-function generateGridVerticesAndUVs(
-  latitudes: Float64Array,
-  longitudes: Float64Array,
-  isReversed: boolean,
-  isRotated: boolean,
-  textureLonCount: number,
-  poleLat?: number,
-  poleLon?: number
-) {
-  const positionValues: number[] = [];
-  const uvs: number[] = [];
-  const latCount = latitudes.length;
-  const lonCount = longitudes.length;
-  const latLonValues = new Float32Array(latCount * lonCount * 2);
-
-  const helper = projectionHelper.value;
-
-  for (let i = 0; i < latCount; i++) {
-    const rawLat = latitudes[i];
-    for (let j = 0; j < lonCount; j++) {
-      const rawLon = longitudes[j];
-
-      // If the grid is rotated, convert the raw latitude and longitude values
-      // to geographic coordinates.
-      const { lat, lon } = isRotated
-        ? rotatedToGeographic(rawLat, rawLon, poleLat!, poleLon!)
-        : { lat: rawLat, lon: rawLon };
-
-      // Store lat/lon for GPU projection and set initial positions
-      const latLonOffset = (i * lonCount + j) * 2;
-      const positionOffset = positionValues.length;
-      helper.projectLatLonToArrays(
-        lat,
-        lon,
-        positionValues,
-        positionOffset,
-        latLonValues,
-        latLonOffset
-      );
-
-      // Calculate the texture coordinates for the point. The `u` coordinate
-      // represents the longitude, and the `v` coordinate represents the latitude.
-      // The coordinates are normalized to the range [0, 1].
-      // Pixel-centre UVs: place each vertex at the centre of its texel so that
-      // nearest-neighbour cell boundaries align with the midpoints between data
-      // points (fixes the half-cell-east visual shift).
-      const u = (j + 0.5) / textureLonCount;
-      const v = isReversed
-        ? (latCount - 1 - i) / (latCount - 1)
-        : i / (latCount - 1);
-      uvs.push(u, v);
-    }
+function getGridDimensions() {
+  if (projectedXYGrid.value) {
+    return {
+      latCount: projectedXYGrid.value.yCoordinates.length,
+      lonCount: projectedXYGrid.value.xCoordinates.length,
+    };
   }
-
-  return { positionValues, uvs, latLonValues };
+  return {
+    latCount: latitudes.value.length,
+    lonCount: longitudes.value.length,
+  };
 }
+
+type TGridGeometryConfig = {
+  latCount: number;
+  lonCount: number;
+  textureLonCount: number;
+  isGlobal: boolean;
+  isLatReversed: boolean;
+  isRotated: boolean;
+  latitudeValues: Float64Array;
+  longitudeValues: Float64Array;
+  projectedGrid: TProjectedXYGrid | null;
+  poleLat?: number;
+  poleLon?: number;
+};
 
 function generateGridIndices(
   latCount: number,
@@ -368,7 +352,23 @@ function normalizeLongitudes(longitudes: Float64Array): Float64Array {
   return Float64Array.from(longitudes, (lon) => ((lon % 360) + 360) % 360);
 }
 
-async function getGaussianGrid() {
+function getProjectedGridGeometryConfig(): TGridGeometryConfig {
+  const { latCount, lonCount } = getGridDimensions();
+  isGridGlobal.value = false;
+  return {
+    latCount,
+    lonCount,
+    textureLonCount: lonCount,
+    isGlobal: false,
+    isLatReversed: false,
+    isRotated: false,
+    latitudeValues: new Float64Array(),
+    longitudeValues: new Float64Array(),
+    projectedGrid: projectedXYGrid.value,
+  };
+}
+
+async function getRegularGridGeometryConfig(): Promise<TGridGeometryConfig> {
   const isRotated = props.isRotated;
   let longitudeValues = normalizeLongitudes(longitudes.value);
   let latitudeValues = latitudes.value;
@@ -398,27 +398,26 @@ async function getGaussianGrid() {
     poleLat = rotatedNorthPole.lat;
     poleLon = rotatedNorthPole.lon;
   }
-  const { positionValues, uvs, latLonValues } = generateGridVerticesAndUVs(
-    latitudeValues,
-    longitudeValues,
+  return {
+    latCount: latitudeValues.length,
+    lonCount: longitudeValues.length,
+    textureLonCount,
+    isGlobal,
     isLatReversed,
     isRotated,
-    textureLonCount,
+    latitudeValues,
+    longitudeValues,
+    projectedGrid: null,
     poleLat,
-    poleLon
-  );
-
-  const latCount = latitudeValues.length;
-  const lonCount = longitudeValues.length;
-
-  return {
-    positionValues,
-    uvs,
-    latLonValues,
-    latCount,
-    lonCount,
-    isGlobal,
+    poleLon,
   };
+}
+
+async function getGridGeometryConfig(): Promise<TGridGeometryConfig> {
+  if (projectedXYGrid.value) {
+    return getProjectedGridGeometryConfig();
+  }
+  return await getRegularGridGeometryConfig();
 }
 
 function cleanupMeshes(totalBatches: number) {
@@ -432,26 +431,77 @@ function cleanupMeshes(totalBatches: number) {
   meshes.length = 0;
 }
 
-function createBatchGeometry(
-  positionValues: number[],
-  uvs: number[],
-  latLonValues: Float32Array,
-  lonCount: number,
-  isGlobal: boolean,
-  latStart: number,
-  latEnd: number
+function getGridVertexLatLon(
+  config: TGridGeometryConfig,
+  globalLatIndex: number,
+  lonIndex: number,
+  transformProjectedGrid: ReturnType<
+    typeof createProjectedCoordinateTransformer
+  > | null
 ) {
-  const geometry = new THREE.BufferGeometry();
+  if (config.projectedGrid && transformProjectedGrid) {
+    return transformProjectedGrid(
+      config.projectedGrid.xCoordinates[lonIndex],
+      config.projectedGrid.yCoordinates[globalLatIndex]
+    );
+  }
+  if (config.isRotated) {
+    return rotatedToGeographic(
+      config.latitudeValues[globalLatIndex],
+      config.longitudeValues[lonIndex],
+      config.poleLat!,
+      config.poleLon!
+    );
+  }
+  return {
+    lat: config.latitudeValues[globalLatIndex],
+    lon: config.longitudeValues[lonIndex],
+  };
+}
 
-  // Extract vertices for this batch (from latStart to latEnd inclusive)
-  const batchLatCount = latEnd - latStart + 1;
-  const startVertex = latStart * lonCount;
-  const endVertex = (latEnd + 1) * lonCount;
+function setBatchVertexData(
+  config: TGridGeometryConfig,
+  globalLatIndex: number,
+  lonIndex: number,
+  batchPositions: Float32Array,
+  batchLatLon: Float32Array,
+  batchUvs: Float32Array,
+  positionOffset: number,
+  latLonOffset: number,
+  uvOffset: number,
+  transformProjectedGrid: ReturnType<
+    typeof createProjectedCoordinateTransformer
+  > | null
+) {
+  const helper = projectionHelper.value;
+  const { lat, lon } = getGridVertexLatLon(
+    config,
+    globalLatIndex,
+    lonIndex,
+    transformProjectedGrid
+  );
+  const denominator = Math.max(1, config.latCount - 1);
 
-  const batchPositions = positionValues.slice(startVertex * 3, endVertex * 3);
-  const batchUvs = uvs.slice(startVertex * 2, endVertex * 2);
-  const batchLatLon = latLonValues.slice(startVertex * 2, endVertex * 2);
+  helper.projectLatLonToArrays(
+    lat,
+    lon,
+    batchPositions,
+    positionOffset,
+    batchLatLon,
+    latLonOffset
+  );
+  batchUvs[uvOffset] = (lonIndex + 0.5) / config.textureLonCount;
+  batchUvs[uvOffset + 1] = config.isLatReversed
+    ? (config.latCount - 1 - globalLatIndex) / denominator
+    : globalLatIndex / denominator;
+}
 
+function setBatchGeometryAttributes(
+  geometry: THREE.BufferGeometry,
+  batchPositions: Float32Array,
+  batchUvs: Float32Array,
+  batchLatLon: Float32Array
+) {
   geometry.setAttribute(
     "position",
     new THREE.Float32BufferAttribute(batchPositions, 3)
@@ -461,17 +511,62 @@ function createBatchGeometry(
     "latLon",
     new THREE.Float32BufferAttribute(batchLatLon, 2)
   );
+}
+
+function createBatchGeometry(
+  config: TGridGeometryConfig,
+  latStart: number,
+  latEnd: number
+) {
+  const geometry = new THREE.BufferGeometry();
+  const { lonCount } = config;
+
+  const batchLatCount = latEnd - latStart + 1;
+  const vertexCount = batchLatCount * lonCount;
+  const batchPositions = new Float32Array(vertexCount * 3);
+  const batchUvs = new Float32Array(vertexCount * 2);
+  const batchLatLon = new Float32Array(vertexCount * 2);
+
+  const transformProjectedGrid =
+    config.projectedGrid &&
+    createProjectedCoordinateTransformer(config.projectedGrid.projection);
+  let positionOffset = 0;
+  let latLonOffset = 0;
+  let uvOffset = 0;
+
+  for (let localLatIndex = 0; localLatIndex < batchLatCount; localLatIndex++) {
+    const globalLatIndex = latStart + localLatIndex;
+    for (let lonIndex = 0; lonIndex < lonCount; lonIndex++) {
+      setBatchVertexData(
+        config,
+        globalLatIndex,
+        lonIndex,
+        batchPositions,
+        batchLatLon,
+        batchUvs,
+        positionOffset,
+        latLonOffset,
+        uvOffset,
+        transformProjectedGrid
+      );
+      positionOffset += 3;
+      latLonOffset += 2;
+      uvOffset += 2;
+    }
+  }
+
+  setBatchGeometryAttributes(geometry, batchPositions, batchUvs, batchLatLon);
 
   // Generate indices for this batch
-  const indices = generateGridIndices(batchLatCount, lonCount, isGlobal);
+  const indices = generateGridIndices(batchLatCount, lonCount, config.isGlobal);
   geometry.setIndex(indices);
   return geometry;
 }
 
 async function makeGeometry() {
   try {
-    const { positionValues, uvs, latLonValues, latCount, lonCount, isGlobal } =
-      await getGaussianGrid();
+    const config = await getGridGeometryConfig();
+    const { latCount } = config;
 
     const totalBatches = Math.ceil((latCount - 1) / BATCH_SIZE);
     cleanupMeshes(totalBatches);
@@ -480,15 +575,7 @@ async function makeGeometry() {
       const latStart = batchIndex * BATCH_SIZE;
       const latEnd = Math.min(latStart + BATCH_SIZE, latCount - 1);
 
-      const geometry = createBatchGeometry(
-        positionValues,
-        uvs,
-        latLonValues,
-        lonCount,
-        isGlobal,
-        latStart,
-        latEnd
-      );
+      const geometry = createBatchGeometry(config, latStart, latEnd);
 
       if (meshes[batchIndex]) {
         meshes[batchIndex].geometry.dispose();
@@ -550,10 +637,11 @@ async function getRotatedNorthPole(): Promise<{ lat: number; lon: number }> {
 }
 
 function makeMaterial(rawData: Float32Array) {
+  const { latCount, lonCount } = getGridDimensions();
   const textures = getRegularData(
     rawData,
-    latitudes.value.length,
-    longitudes.value.length,
+    latCount,
+    lonCount,
     isGridGlobal.value
   );
   const low = bounds.value?.low as number;
@@ -573,6 +661,31 @@ function makeMaterial(rawData: Float32Array) {
   );
 }
 
+function buildProjectedHoverSamples(rawData: Float32Array) {
+  const samples: { lat: number; lon: number; value: number }[] = [];
+  const projectedToGeographic = createProjectedCoordinateTransformer(
+    projectedXYGrid.value!.projection
+  );
+  const latCount = projectedXYGrid.value!.yCoordinates.length;
+  const lonCount = projectedXYGrid.value!.xCoordinates.length;
+
+  for (let latIdx = 0; latIdx < latCount; latIdx++) {
+    for (let lonIdx = 0; lonIdx < lonCount; lonIdx++) {
+      const { lat, lon } = projectedToGeographic(
+        projectedXYGrid.value!.xCoordinates[lonIdx],
+        projectedXYGrid.value!.yCoordinates[latIdx]
+      );
+      samples.push({
+        lat,
+        lon,
+        value: rawData[latIdx * lonCount + lonIdx],
+      });
+    }
+  }
+
+  return samples;
+}
+
 async function getDimensionValues(
   dimensionRanges: TDimensionRange[],
   indices: (number | zarr.Slice | null)[]
@@ -587,6 +700,10 @@ async function getDimensionValues(
 }
 
 async function buildHoverSamples(rawData: Float32Array) {
+  if (projectedXYGrid.value) {
+    return buildProjectedHoverSamples(rawData);
+  }
+
   const samples: { lat: number; lon: number; value: number }[] = [];
   let rotPole: { lat: number; lon: number } | null = null;
   if (props.isRotated) {

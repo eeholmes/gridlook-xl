@@ -45,6 +45,7 @@
     "lodash.debounce": "4.0.8",
     "pinia": "^3.0.4",
     "primevue": "^4.5.5",
+    "proj4": "^2.20.8",
     "qrcode": "^1.5.4",
     "quick-lru": "^7.3.0",
     "three": "^0.184",
