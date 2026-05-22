@@ -95,51 +95,98 @@ function searchDimensionsAndCoordinates(
   }
 }
 
+/**
+ * Returns the path of the first level in a multiscale pyramid (e.g. "0"),
+ * or null if the group attributes do not describe a multiscale layout.
+ */
+function getMultiscaleLevelPath(attrs: zarr.Attributes): string | null {
+  const multiscales = attrs?.multiscales;
+  if (!Array.isArray(multiscales) || multiscales.length === 0) {
+    return null;
+  }
+  const datasets = multiscales[0]?.datasets;
+  if (!Array.isArray(datasets) || datasets.length === 0) {
+    return null;
+  }
+  const firstPath = datasets[0]?.path;
+  return typeof firstPath === "string" && firstPath.length > 0
+    ? firstPath
+    : null;
+}
+
+function isArrayInGroup(
+  path: zarr.AbsolutePath,
+  kind: "array" | "group",
+  groupPrefix: string | null
+) {
+  if (kind !== "array") {
+    return false;
+  }
+  if (!groupPrefix) {
+    return true;
+  }
+  return path.startsWith(groupPrefix);
+}
+
+async function collectArrayEntry(
+  path: zarr.AbsolutePath,
+  root: zarr.Group<zarr.AsyncReadable>,
+  src: string,
+  groupPath: string,
+  groupPrefix: string | null,
+  dimensions: Set<string>
+) {
+  const variable = await zarr.open(root.resolve(path), {
+    kind: "array",
+  });
+  searchDimensionsAndCoordinates(dimensions, variable);
+
+  // When scoped to a group, strip the group prefix so that variable
+  // names are relative (e.g. "climate" instead of "0/climate") and
+  // the dataset path carries the level prefix.
+  const varname = groupPrefix ? path.slice(groupPrefix.length) : path.slice(1);
+  return {
+    [varname]: {
+      store: src,
+      dataset: groupPath,
+      hidden: !isValidVariable(
+        varname,
+        variable.shape,
+        variable.dimensionNames as string[]
+      ),
+      attrs: {
+        ...variable.attrs,
+        dimensionNames: variable.dimensionNames,
+      },
+    },
+  };
+}
+
 async function collectVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string
+  src: string,
+  groupPath: string = ""
 ): Promise<{
   candidates: PromiseSettledResult<Record<string, TDataSource>>[];
   dimensions: Set<string>;
 }> {
+  const groupPrefix = groupPath ? `/${groupPath}/` : null;
   const dimensions = new Set<string>();
   const candidates = await Promise.allSettled(
     store
       .contents()
-      .map(
-        async ({
+      .filter(
+        ({
           path,
           kind,
         }: {
           path: zarr.AbsolutePath;
           kind: "array" | "group";
-        }) => {
-          if (kind !== "array") {
-            return {};
-          }
-          const variable = await zarr.open(root.resolve(path), {
-            kind: "array",
-          });
-          searchDimensionsAndCoordinates(dimensions, variable);
-
-          const varname = path.slice(1);
-          return {
-            [varname]: {
-              store: src,
-              dataset: "",
-              hidden: !isValidVariable(
-                varname,
-                variable.shape,
-                variable.dimensionNames as string[]
-              ),
-              attrs: {
-                ...variable.attrs,
-                dimensionNames: variable.dimensionNames,
-              },
-            },
-          };
-        }
+        }) => isArrayInGroup(path, kind, groupPrefix)
+      )
+      .map(({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
+        collectArrayEntry(path, root, src, groupPath, groupPrefix, dimensions)
       )
   );
 
@@ -256,9 +303,15 @@ function mergeDatasourceCandidates(
 async function processZarrVariables(
   store: zarr.Listable<zarr.AsyncReadable>,
   root: zarr.Group<zarr.AsyncReadable>,
-  src: string
+  src: string,
+  groupPath: string = ""
 ): Promise<Record<string, TDataSource>> {
-  const { candidates, dimensions } = await collectVariables(store, root, src);
+  const { candidates, dimensions } = await collectVariables(
+    store,
+    root,
+    src,
+    groupPath
+  );
   return mergeDatasourceCandidates(candidates, dimensions);
 }
 
@@ -358,7 +411,8 @@ export async function indexFromZarr(src: string): Promise<TSources> {
       { format: "v2" }
     );
     const root = await zarr.open(store, { kind: "group" });
-    const datasources = await processZarrVariables(store, root, src);
+    const levelPath = getMultiscaleLevelPath(root.attrs) ?? "";
+    const datasources = await processZarrVariables(store, root, src, levelPath);
     return createIndex(
       root.attrs?.title as string,
       datasources,
@@ -372,7 +426,13 @@ export async function indexFromZarr(src: string): Promise<TSources> {
         { format: "v3" }
       );
       const root = await zarr.open(store, { kind: "group" });
-      const datasources = await processZarrVariables(store, root, src);
+      const levelPath = getMultiscaleLevelPath(root.attrs) ?? "";
+      const datasources = await processZarrVariables(
+        store,
+        root,
+        src,
+        levelPath
+      );
       return createIndex(
         root.attrs?.title as string,
         datasources,

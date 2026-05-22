@@ -291,6 +291,31 @@ export class ZarrDataManager {
     if (datavar.attrs?.grid_mapping) {
       return String(datavar.attrs.grid_mapping).split(":")[0];
     }
+
+    // Also search auxiliary coordinates (e.g. "spatial_ref" written by
+    // rioxarray / xarray-spatial) for a variable carrying CRS metadata.
+    if (datavar.attrs?.coordinates) {
+      const coords = String(datavar.attrs.coordinates).split(" ");
+      for (const coord of coords) {
+        try {
+          const resolved = this.resolveVariableReference(
+            datasources,
+            varname,
+            coord
+          );
+          const coordVar = await this.getVariableInfo(
+            resolved.datasource,
+            resolved.variable
+          );
+          if (coordVar.attrs?.crs_wkt || coordVar.attrs?.grid_mapping_name) {
+            return coord;
+          }
+        } catch {
+          // Not a CRS variable or not found — continue scanning.
+        }
+      }
+    }
+
     const group = await ZarrDataManager.getDatasetGroup(source);
     if (group.attrs?.grid_mapping) {
       return String(group.attrs.grid_mapping).split(":")[0];
