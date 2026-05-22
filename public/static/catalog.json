@@ -5,32 +5,44 @@
     {
       "title": "ARCO-OCEAN (Zarr v2)",
       "url": "https://ogs-arco-ocean.s3.eu-south-1.amazonaws.com/dataset/tres=1d/res=0p25/levels=10/",
-      "tag": "regular"
+      "tag": "regular",
+      "store": "Zarr v2",
+      "crs": "EPSG:4326"
     },
     {
       "title": "Indian Ocean - Mind the Gap (Zarr v2)",
       "url": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/IO.zarr/",
-      "tag": "regular"
+      "tag": "regular",
+      "store": "Zarr v2",
+      "crs": "EPSG:4326"
     },
     {
       "title": "MUR High-Res SST",
       "url": "https://mur-sst.s3.us-west-2.amazonaws.com/zarr-v1/",
-      "tag": "regular"
+      "tag": "regular",
+      "store": "Zarr v2",
+      "crs": "EPSG:4326"
     },
     {
       "title": "CHLA-Z (Zarr v3)",
       "url": "https://eeholmes.github.io/gridlook/static/index_chla_z.json",
-      "tag": "regular"
+      "tag": "regular",
+      "store": "Zarr v3",
+      "crs": "EPSG:4326"
     },
     {
       "title": "ECMWF AIFS (Dynamical)",
       "url": "icechunk+https://dynamical-ecmwf-aifs-single.s3.us-west-2.amazonaws.com/ecmwf-aifs-single-forecast/v0.1.0.icechunk/",
-      "tag": "regular"
+      "tag": "regular",
+      "store": "Icechunk",
+      "crs": "EPSG:4326"
     },
     {
       "title": "DWD ICON (Dynamical)",
       "url": "icechunk+https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/",
-      "tag": "regular"
+      "tag": "regular",
+      "store": "Icechunk",
+      "crs": "EPSG:4326"
     }
   ]
 }

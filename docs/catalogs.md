@@ -16,7 +16,9 @@ Each dataset entry currently supports:
 
 - `url`: required dataset URL
 - `title`: optional display name
-- `tag`: optional short label shown in the catalog list
+- `tag`: optional grid-type label shown in the catalog list and grid-type filter
+- `store`: optional store-type label shown in the catalog list and store-type filter
+- `crs`: optional CRS label shown in the catalog list and CRS filter
 - `description`: optional longer text used in the catalog list and search
 
 `url` can be either:
@@ -37,12 +39,16 @@ Example:
       "title": "ICON Daily Mean",
       "url": "https://example.org/icon/daily_mean.zarr",
       "tag": "healpix",
+      "store": "Zarr v3",
+      "crs": "EPSG:4326",
       "description": "Daily mean atmosphere output on the native grid."
     },
     {
       "title": "AWI Ocean",
       "url": "https://example.org/awi/ocean.zarr",
-      "tag": "irregular"
+      "tag": "irregular",
+      "store": "Zarr v2",
+      "crs": "EPSG:4326"
     }
   ]
 }
@@ -96,7 +102,7 @@ Example:
 
 ## Notes
 
-- `tag` is only used for display and sorting in the catalog panel.
+- `tag`, `store`, and `crs` are used for both display and filtering in the catalog panel.
 - `description` is shown in the catalog panel and is also included in search.
 - Use dataset URLs that Gridlook can already open directly.
 - Absolute HTTPS URLs are the safest choice for catalog entries.
