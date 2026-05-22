@@ -69,6 +69,14 @@ const updatingData = ref(false);
 
 /** True when the loaded dataset uses a polar stereographic CRS. */
 const isPolarStereoData = ref(false);
+/** Aspect ratio (width / height = nx / ny) for the polar stereo grid canvas. */
+const polarAspectRatio = ref(1);
+/** Inline style for the canvas box — sets aspect-ratio when polar data is loaded. */
+const polarBoxStyle = computed(() =>
+  isPolarStereoData.value
+    ? { "aspect-ratio": String(polarAspectRatio.value) }
+    : {}
+);
 /** True when `isPolarStereoData` and the selected projection is incompatible with polar data. */
 const showPolarError = computed(() => {
   if (!isPolarStereoData.value) {
@@ -193,15 +201,16 @@ async function datasourceUpdate() {
       );
       if (isPolarStereographicCRS(crsStr)) {
         isPolarStereoData.value = true;
+        // Set projection and mask immediately (before any await) so that
+        // showPolarError stays false while the hemisphere params are loading.
+        store.projectionMode = PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT;
+        // The global land/sea mask is not meaningful for a polar domain.
+        store.landSeaMaskChoice = LAND_SEA_MASK_MODES.OFF;
         const { isNorthPole } = await getPolarStereoCRSParams(
           props.datasources,
           varnameSelector.value
         );
-        // Auto-select azimuthal equidistant centred on the correct pole.
-        store.projectionMode = PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT;
         store.projectionCenter = { lat: isNorthPole ? 90 : -90, lon: 0 };
-        // The global land/sea mask is not meaningful for a polar domain.
-        store.landSeaMaskChoice = LAND_SEA_MASK_MODES.OFF;
       }
     } catch {
       // CRS lookup may fail for datasets without a CRS variable or group-level
@@ -246,6 +255,8 @@ async function resolveLatLon2D(
       props.datasources!,
       varnameSelector.value
     );
+    // Update aspect ratio to match actual grid dimensions (nx / ny).
+    polarAspectRatio.value = result.nx / result.ny;
     return {
       latitudesData: result.latitudes2D,
       longitudesData: result.longitudes2D,
@@ -843,6 +854,7 @@ defineExpose({ makeSnapshot, toggleRotate, applyCameraPreset });
     ref="box"
     class="globe_box"
     :class="{ 'globe_box--polar': isPolarStereoData }"
+    :style="polarBoxStyle"
     tabindex="0"
     autofocus
   >
@@ -863,7 +875,6 @@ defineExpose({ makeSnapshot, toggleRotate, applyCameraPreset });
 
 <style scoped>
 .globe_box--polar {
-  aspect-ratio: 1 / 1;
   max-height: 100%;
   max-width: 100%;
   margin: auto;
