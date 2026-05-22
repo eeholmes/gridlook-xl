@@ -2,7 +2,7 @@
 import { storeToRefs } from "pinia";
 import { computed, ref, watch } from "vue";
 
-import type { TModelInfo } from "@/lib/types/GlobeTypes.js";
+import { VALUE_TRANSFORMS, type TModelInfo } from "@/lib/types/GlobeTypes.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
 
 const model = defineModel<string>({ required: true });
@@ -12,7 +12,7 @@ const props = defineProps<{
 }>();
 
 const store = useGlobeControlStore();
-const { loading } = storeToRefs(store);
+const { loading, transformMode } = storeToRefs(store);
 
 const allVisibleVariables = computed(() => {
   const visibleVars = Object.keys(props.modelInfo.vars).filter((varname) => {
@@ -91,6 +91,13 @@ const currentVarUnits = computed(() => {
   return currentVarAttrs.value?.units ?? "-";
 });
 
+const showCurrentVarUnits = computed(() => {
+  return (
+    transformMode.value === VALUE_TRANSFORMS.LINEAR &&
+    currentVarUnits.value !== "-"
+  );
+});
+
 const currentVarLabel = computed(() => {
   return (
     currentVarAttrs.value?.long_name ??
@@ -144,7 +151,7 @@ function getOptionLabel(varname: string): string {
         <span v-word-break>
           {{ currentVarLabel }}
         </span>
-        / {{ currentVarUnits }}
+        <template v-if="showCurrentVarUnits"> / {{ currentVarUnits }}</template>
       </div>
     </div>
   </div>
