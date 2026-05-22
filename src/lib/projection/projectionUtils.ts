@@ -17,6 +17,8 @@ export const PROJECTION_TYPES = {
   EQUIRECTANGULAR: "equirectangular",
   AZIMUTHAL_EQUIDISTANT: "azimuthal_equidistant",
   AZIMUTHAL_HYBRID: "azimuthal_hybrid",
+  POLAR_NORTH: "polar_north",
+  POLAR_SOUTH: "polar_south",
 } as const;
 
 export type TProjectionType =
@@ -100,6 +102,12 @@ export class ProjectionHelper {
         d3Projection = geoCylindricalEqualArea();
         break;
       case PROJECTION_TYPES.EQUIRECTANGULAR:
+        d3Projection = d3.geoEquirectangular();
+        break;
+      case PROJECTION_TYPES.POLAR_NORTH:
+      case PROJECTION_TYPES.POLAR_SOUTH:
+        // Flat display using normalised x/y as lat/lon; equirectangular is the
+        // correct flat shader to use for this coordinate range.
         d3Projection = d3.geoEquirectangular();
         break;
       case PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT:

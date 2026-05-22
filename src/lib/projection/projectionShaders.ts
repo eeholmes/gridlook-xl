@@ -21,6 +21,10 @@ export const PROJECTION_TYPE_BY_MODE = {
   [PROJECTION_TYPES.CYLINDRICAL_EQUAL_AREA]: 5,
   [PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT]: 6,
   [PROJECTION_TYPES.AZIMUTHAL_HYBRID]: 7,
+  // Polar projections use normalised x/y fed as lat/lon — equirectangular
+  // shader produces the correct flat display for this coordinate space.
+  [PROJECTION_TYPES.POLAR_NORTH]: 1,
+  [PROJECTION_TYPES.POLAR_SOUTH]: 1,
 } as const;
 
 export type TProjectionTypeId =

@@ -554,3 +554,124 @@ export async function getXYCoordinatesAsLatLon(
       `currently supported. CRS: ${crsWkt.slice(0, 120)}`
   );
 }
+
+// ---------------------------------------------------------------------------
+// Polar Stereographic projection support
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the string (WKT or PROJ4) describes a polar
+ * stereographic projection.
+ */
+export function isPolarStereographicCRS(str: string): boolean {
+  const lower = str.toLowerCase();
+  return (
+    lower.includes("polar_stereographic") ||
+    (lower.includes("+proj=stere") &&
+      (lower.includes("+lat_0=-90") ||
+        lower.includes("+lat_0=90") ||
+        /\+lat_ts=-?\d/.test(lower)))
+  );
+}
+
+/**
+ * Retrieve a CRS string (WKT or PROJ4) describing the coordinate reference
+ * system for an XY grid variable.  Tries the dedicated CRS variable first,
+ * then falls back to group-level PROJ4 attributes written by rioxarray.
+ *
+ * Returns an empty string when no CRS information is found.
+ */
+export async function getCRSStringForXYVariable(
+  datasources: TSources,
+  currentVarname: string
+): Promise<string> {
+  try {
+    const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
+    if (crs.attrs?.grid_mapping_name === "polar_stereographic") {
+      return "polar_stereographic";
+    }
+    const wkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
+    if (wkt) {
+      return wkt;
+    }
+  } catch {
+    // No CRS variable found
+  }
+  try {
+    const source = ZarrDataManager.getDatasetSource(
+      datasources,
+      currentVarname
+    );
+    const group = await ZarrDataManager.getDatasetGroup(source);
+    const proj4 = String(group.attrs?.proj4_params ?? "");
+    if (proj4) {
+      return proj4;
+    }
+  } catch {
+    // No group-level CRS attrs
+  }
+  return "";
+}
+
+/**
+ * Read the 1-D `x` and `y` coordinate arrays from a polar stereographic
+ * dataset and normalise them to the [−90, 90] (latitude-like) and
+ * [−180, 180] (longitude-like) ranges used by the flat polar display.
+ *
+ * Normalisation is symmetric around the origin so that the pole maps to
+ * (0, 0), which aligns with the centre of the flat polar projection.
+ */
+export async function getXYCoordinatesForPolarDisplay(
+  datasources: TSources,
+  currentVarname: string
+): Promise<{
+  latitudes: Float64Array<ArrayBuffer>;
+  longitudes: Float64Array<ArrayBuffer>;
+}> {
+  const xRef = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    "x"
+  );
+  const yRef = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    "y"
+  );
+
+  const [xArray, yArray] = await Promise.all([
+    ZarrDataManager.getVariableInfo(xRef.datasource, xRef.variable),
+    ZarrDataManager.getVariableInfo(yRef.datasource, yRef.variable),
+  ]);
+
+  const [xData, yData] = await Promise.all([
+    ZarrDataManager.getVariableDataFromArray(xArray),
+    ZarrDataManager.getVariableDataFromArray(yArray),
+  ]);
+
+  const xRaw = castDataVarToFloat32(xData.data);
+  const yRaw = castDataVarToFloat32(yData.data);
+
+  // Shared scale factor so the aspect ratio is preserved.
+  let maxExtent = 1;
+  for (const v of xRaw) {
+    const a = Math.abs(v);
+    if (a > maxExtent) {
+      maxExtent = a;
+    }
+  }
+  for (const v of yRaw) {
+    const a = Math.abs(v);
+    if (a > maxExtent) {
+      maxExtent = a;
+    }
+  }
+
+  const longitudes = new Float64Array(
+    Float64Array.from(xRaw, (v) => (v / maxExtent) * 180).buffer
+  );
+  const latitudes = new Float64Array(
+    Float64Array.from(yRaw, (v) => (v / maxExtent) * 90).buffer
+  );
+  return { latitudes, longitudes };
+}

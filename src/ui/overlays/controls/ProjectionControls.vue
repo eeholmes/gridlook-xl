@@ -76,6 +76,8 @@ function resetProjectionCenter() {
         <option :value="PROJECTION_TYPES.AZIMUTHAL_HYBRID">
           Azimuthal Hybrid
         </option>
+        <option :value="PROJECTION_TYPES.POLAR_NORTH">Polar (North)</option>
+        <option :value="PROJECTION_TYPES.POLAR_SOUTH">Polar (South)</option>
       </select>
     </div>
     <div class="w-100 projection-center" :class="{ 'is-disabled': !isFlat }">
