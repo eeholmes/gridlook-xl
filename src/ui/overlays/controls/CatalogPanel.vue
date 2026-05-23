@@ -121,7 +121,7 @@ async function copyUrl(url: string) {
   try {
     await navigator.clipboard.writeText(url);
     copiedUrl.value = url;
-    window.setTimeout(() => {
+    setTimeout(() => {
       if (copiedUrl.value === url) {
         copiedUrl.value = null;
       }
@@ -330,9 +330,9 @@ async function copyUrl(url: string) {
   display: flex !important;
   flex-direction: column;
   width: 100%;
-  border-bottom: 1px solid var(--bulma-border) !important;
+  border-bottom: 1px solid var(--bulma-border);
   &:last-child {
-    border-bottom: none !important;
+    border-bottom: none;
   }
 }
 
@@ -347,7 +347,7 @@ async function copyUrl(url: string) {
   color: inherit;
   padding: 0;
   &:hover {
-    background-color: var(--bulma-link-light) !important;
+    background-color: var(--bulma-link-light);
   }
 }
 
