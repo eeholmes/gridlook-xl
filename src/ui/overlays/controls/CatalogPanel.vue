@@ -404,7 +404,7 @@ async function copyUrl(url: string) {
     background-color: var(--bulma-link-light);
   }
   &:active {
-    filter: brightness(0.98);
+    filter: brightness(0.95);
   }
   &:focus-visible {
     outline: 2px solid var(--bulma-link);
