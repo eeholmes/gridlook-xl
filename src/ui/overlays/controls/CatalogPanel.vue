@@ -387,6 +387,10 @@ async function copyUrl(url: string) {
   flex: 1 1 auto;
 }
 
+.catalog-entry-tags-row {
+  margin-top: 0.35rem;
+}
+
 .catalog-entry-tags {
   display: flex;
   gap: 0.25rem;
