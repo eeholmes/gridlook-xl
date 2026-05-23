@@ -243,14 +243,7 @@ async function copyUrl(url: string) {
         :key="entry.url + '-' + i"
         class="catalog-entry panel-block"
       >
-        <div
-          class="catalog-entry-select"
-          role="button"
-          tabindex="0"
-          @click="select(entry)"
-          @keydown.enter.stop.prevent="select(entry)"
-          @keydown.space.stop.prevent="select(entry)"
-        >
+        <div class="catalog-entry-select" @click="select(entry)">
           <div class="catalog-entry-content">
             <div class="catalog-entry-header">
               <div class="catalog-entry-main">
