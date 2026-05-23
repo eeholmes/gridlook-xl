@@ -15,6 +15,7 @@ const emit = defineEmits<{
 const searchQuery = ref("");
 const copiedUrl = ref<string | null>(null);
 const copyFailedUrl = ref<string | null>(null);
+const COPY_FEEDBACK_DURATION_MS = 1500;
 
 const filterFormat = ref("all");
 const filterAccess = ref("all");
@@ -127,7 +128,7 @@ async function copyUrl(url: string) {
       if (copiedUrl.value === url) {
         copiedUrl.value = null;
       }
-    }, 1500);
+    }, COPY_FEEDBACK_DURATION_MS);
   } catch {
     copiedUrl.value = null;
     copyFailedUrl.value = url;
@@ -135,7 +136,7 @@ async function copyUrl(url: string) {
       if (copyFailedUrl.value === url) {
         copyFailedUrl.value = null;
       }
-    }, 1500);
+    }, COPY_FEEDBACK_DURATION_MS);
   }
 }
 </script>
@@ -250,7 +251,7 @@ async function copyUrl(url: string) {
           <div class="catalog-entry-content">
             <div class="catalog-entry-header">
               <div class="catalog-entry-main">
-                <span class="icon is-small has-text-link mt-1">
+                <span class="icon is-small has-text-link">
                   <i class="fa-solid fa-database"></i>
                 </span>
                 <div class="catalog-entry-text">
