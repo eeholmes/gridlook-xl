@@ -90,6 +90,8 @@ const longitudes = ref(new Float64Array());
 const latitudes = ref(new Float64Array());
 
 const BATCH_SIZE = 60;
+const HALF_CIRCLE_DEGREES = 180;
+const FULL_CIRCLE_DEGREES = 360;
 let meshes: THREE.Mesh[] = [];
 watch(
   () => varnameSelector.value,
@@ -288,7 +290,7 @@ function isLongitudeGlobal(longitudes: Float64Array): boolean {
  * Generates vertices, UVs, and lat/lon coordinates for one latitude batch.
  * `latStart` and `latEnd` are global latitude row indices into `latitudes`.
  */
-function generateBatchVerticesAndUVs(
+function generateBatchGeometryData(
   latitudes: Float64Array,
   longitudes: Float64Array,
   latStart: number,
@@ -454,7 +456,7 @@ function createBatchGeometry(
   const geometry = new THREE.BufferGeometry();
 
   const batchLatCount = latEnd - latStart + 1;
-  const { positionValues, uvs, latLonValues } = generateBatchVerticesAndUVs(
+  const { positionValues, uvs, latLonValues } = generateBatchGeometryData(
     latitudeValues,
     longitudeValues,
     latStart,
@@ -712,10 +714,10 @@ function nearestLonIndex(lons: Float64Array, target: number): number {
   const hi = lons[lons.length - 1];
 
   let adjustedTarget = target;
-  if (adjustedTarget < lo - 180) {
-    adjustedTarget += 360;
-  } else if (adjustedTarget > hi + 180) {
-    adjustedTarget -= 360;
+  if (adjustedTarget < lo - HALF_CIRCLE_DEGREES) {
+    adjustedTarget += FULL_CIRCLE_DEGREES;
+  } else if (adjustedTarget > hi + HALF_CIRCLE_DEGREES) {
+    adjustedTarget -= FULL_CIRCLE_DEGREES;
   }
 
   const idx = nearestIndex(lons, adjustedTarget);
@@ -728,8 +730,8 @@ function nearestLonIndex(lons: Float64Array, target: number): number {
   const dist = Math.abs(lons[idx] - adjustedTarget);
   let altDist = Math.abs(lons[altIdx] - altTarget);
   // Normalize wrapped distance when the alternative crosses the antimeridian.
-  if (altDist > 180) {
-    altDist = 360 - altDist;
+  if (altDist > HALF_CIRCLE_DEGREES) {
+    altDist = FULL_CIRCLE_DEGREES - altDist;
   }
   return dist <= altDist ? idx : altIdx;
 }
