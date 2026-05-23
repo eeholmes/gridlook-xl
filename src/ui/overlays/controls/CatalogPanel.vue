@@ -14,19 +14,42 @@ const emit = defineEmits<{
 
 const searchQuery = ref("");
 
+const filterFormat = ref("all");
+const filterAccess = ref("all");
+const filterLayout = ref("all");
 const filterGrid = ref("all");
-const filterStore = ref("all");
+const filterConvention = ref("all");
 const filterCrs = ref("all");
 
-const uniqueGridTypes = computed(() =>
+const uniqueFormats = computed(() =>
   Array.from(
-    new Set(props.datasets.map((d) => d.tag).filter((v): v is string => !!v))
+    new Set(props.datasets.map((d) => d.format).filter((v): v is string => !!v))
   ).sort()
 );
 
-const uniqueStoreTypes = computed(() =>
+const uniqueAccessTypes = computed(() =>
   Array.from(
-    new Set(props.datasets.map((d) => d.store).filter((v): v is string => !!v))
+    new Set(props.datasets.map((d) => d.access).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueLayouts = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.layout).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueGridTypes = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.grid).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueConventions = computed(() =>
+  Array.from(
+    new Set(
+      props.datasets.map((d) => d.convention).filter((v): v is string => !!v)
+    )
   ).sort()
 );
 
@@ -44,8 +67,11 @@ const filteredAndSortedDatasets = computed(() => {
       const haystack = [
         entry.title ?? "",
         entry.url,
-        entry.tag ?? "",
-        entry.store ?? "",
+        entry.format ?? "",
+        entry.access ?? "",
+        entry.layout ?? "",
+        entry.grid ?? "",
+        entry.convention ?? "",
         entry.crs ?? "",
         entry.description ?? "",
       ]
@@ -56,10 +82,22 @@ const filteredAndSortedDatasets = computed(() => {
       }
     }
 
-    if (filterGrid.value !== "all" && entry.tag !== filterGrid.value) {
+    if (filterFormat.value !== "all" && entry.format !== filterFormat.value) {
       return false;
     }
-    if (filterStore.value !== "all" && entry.store !== filterStore.value) {
+    if (filterAccess.value !== "all" && entry.access !== filterAccess.value) {
+      return false;
+    }
+    if (filterLayout.value !== "all" && entry.layout !== filterLayout.value) {
+      return false;
+    }
+    if (filterGrid.value !== "all" && entry.grid !== filterGrid.value) {
+      return false;
+    }
+    if (
+      filterConvention.value !== "all" &&
+      entry.convention !== filterConvention.value
+    ) {
       return false;
     }
     if (filterCrs.value !== "all" && entry.crs !== filterCrs.value) {
@@ -105,6 +143,36 @@ function select(entry: TCatalogEntry) {
           dataset{{ datasets.length !== 1 ? "s" : "" }}
         </span>
         <div class="field is-grouped is-align-items-center mb-0">
+          <div v-if="uniqueFormats.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterFormat" title="Filter by format">
+                <option value="all">Format: All</option>
+                <option v-for="v in uniqueFormats" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div v-if="uniqueAccessTypes.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterAccess" title="Filter by access">
+                <option value="all">Access: All</option>
+                <option v-for="v in uniqueAccessTypes" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div v-if="uniqueLayouts.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterLayout" title="Filter by layout">
+                <option value="all">Layout: All</option>
+                <option v-for="v in uniqueLayouts" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
           <div v-if="uniqueGridTypes.length > 0" class="control">
             <div class="select is-small">
               <select v-model="filterGrid" title="Filter by grid type">
@@ -115,11 +183,11 @@ function select(entry: TCatalogEntry) {
               </select>
             </div>
           </div>
-          <div v-if="uniqueStoreTypes.length > 0" class="control">
+          <div v-if="uniqueConventions.length > 0" class="control">
             <div class="select is-small">
-              <select v-model="filterStore" title="Filter by store type">
-                <option value="all">Store: All</option>
-                <option v-for="v in uniqueStoreTypes" :key="v" :value="v">
+              <select v-model="filterConvention" title="Filter by convention">
+                <option value="all">Convention: All</option>
+                <option v-for="v in uniqueConventions" :key="v" :value="v">
                   {{ v }}
                 </option>
               </select>
@@ -164,11 +232,26 @@ function select(entry: TCatalogEntry) {
               </strong>
             </div>
             <div class="catalog-entry-tags">
-              <span v-if="entry.tag" class="tag is-link is-light is-small">
-                {{ entry.tag }}
+              <span v-if="entry.format" class="tag is-info is-light is-small">
+                {{ entry.format }}
               </span>
-              <span v-if="entry.store" class="tag is-info is-light is-small">
-                {{ entry.store }}
+              <span
+                v-if="entry.access"
+                class="tag is-warning is-light is-small"
+              >
+                {{ entry.access }}
+              </span>
+              <span v-if="entry.layout" class="tag is-light is-small">
+                {{ entry.layout }}
+              </span>
+              <span v-if="entry.grid" class="tag is-link is-light is-small">
+                {{ entry.grid }}
+              </span>
+              <span
+                v-if="entry.convention"
+                class="tag is-primary is-light is-small"
+              >
+                {{ entry.convention }}
               </span>
               <span v-if="entry.crs" class="tag is-success is-light is-small">
                 {{ entry.crs }}

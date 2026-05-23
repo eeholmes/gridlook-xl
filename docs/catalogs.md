@@ -16,8 +16,11 @@ Each dataset entry currently supports:
 
 - `url`: required dataset URL
 - `title`: optional display name
-- `tag`: optional grid-type label shown in the catalog list and grid-type filter
-- `store`: optional store-type label shown in the catalog list and store-type filter
+- `format`: optional dataset format label (for example `Zarr v2` or `Zarr v3`)
+- `access`: optional access mode label (for example `direct` or `icechunk`)
+- `layout`: optional layout label (for example `simple`, `grouped`, or `multiscale`)
+- `grid`: optional grid-type label shown in the catalog list and grid filter
+- `convention`: optional convention label (for example `GeoZarr`)
 - `crs`: optional CRS label shown in the catalog list and CRS filter
 - `description`: optional longer text used in the catalog list and search
 
@@ -38,16 +41,22 @@ Example:
     {
       "title": "ICON Daily Mean",
       "url": "https://example.org/icon/daily_mean.zarr",
-      "tag": "healpix",
-      "store": "Zarr v3",
+      "format": "Zarr v3",
+      "access": "direct",
+      "layout": "grouped",
+      "grid": "healpix",
+      "convention": null,
       "crs": "EPSG:4326",
       "description": "Daily mean atmosphere output on the native grid."
     },
     {
       "title": "AWI Ocean",
       "url": "https://example.org/awi/ocean.zarr",
-      "tag": "irregular",
-      "store": "Zarr v2",
+      "format": "Zarr v2",
+      "access": "direct",
+      "layout": "simple",
+      "grid": "irregular",
+      "convention": null,
       "crs": "EPSG:4326"
     }
   ]
@@ -102,7 +111,7 @@ Example:
 
 ## Notes
 
-- `tag`, `store`, and `crs` are used for both display and filtering in the catalog panel.
+- `format`, `access`, `layout`, `grid`, `convention`, and `crs` are used for both display and filtering in the catalog panel.
 - `description` is shown in the catalog panel and is also included in search.
 - Use dataset URLs that Gridlook can already open directly.
 - Absolute HTTPS URLs are the safest choice for catalog entries.
