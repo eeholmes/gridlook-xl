@@ -2,7 +2,11 @@ import { IcechunkStore } from "icechunk-js";
 import QuickLRU from "quick-lru";
 import * as zarr from "zarrita";
 
-import type { TDataSource, TSources } from "@/lib/types/GlobeTypes.ts";
+import type {
+  TDataSource,
+  TSources,
+  TZarrFormat,
+} from "@/lib/types/GlobeTypes.ts";
 
 export type TZarrDatasetMetadata = {
   attrs: zarr.Attributes;
@@ -144,7 +148,8 @@ export class ZarrDataManager {
   }
 
   private static async getDataset(
-    datasource: TDatasetSource
+    datasource: TDatasetSource,
+    format?: TZarrFormat
   ): Promise<zarr.Group<zarr.AsyncReadable>> {
     const storePath = this.normalizeStorePath(datasource.store);
     if (!this.pendingStore || this.fetchStorePath !== storePath) {
@@ -172,15 +177,28 @@ export class ZarrDataManager {
 
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
     const target = datasetPath ? root.resolve(datasetPath) : root;
-    const dataset = await zarr.open(target, { kind: "group" });
+    let dataset: zarr.Group<zarr.AsyncReadable>;
+    if (format === 2) {
+      dataset = await zarr.open.v2(target, { kind: "group" });
+    } else if (format === 3) {
+      dataset = await zarr.open.v3(target, { kind: "group" });
+    } else {
+      dataset = await zarr.open(target, { kind: "group" });
+    }
     return dataset;
   }
 
   private static async getVariable(
     store: zarr.Group<zarr.AsyncReadable>,
-    variable: string
+    variable: string,
+    format?: TZarrFormat
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const fetchPromise = (async () => {
+      if (format === 2) {
+        return await zarr.open.v2(store.resolve(variable), { kind: "array" });
+      } else if (format === 3) {
+        return await zarr.open.v3(store.resolve(variable), { kind: "array" });
+      }
       return await zarr.open(store.resolve(variable), {
         kind: "array",
       });
@@ -195,14 +213,15 @@ export class ZarrDataManager {
 
   static async getVariableInfo(
     datasource: TDatasetSource,
-    variable: string
+    variable: string,
+    format?: TZarrFormat
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const storePath = this.normalizeStorePath(datasource.store);
     const datasetPath = this.normalizeDatasetPath(datasource.dataset);
     const variablePath = this.normalizeVariablePath(variable);
-    const group = await this.getDataset(datasource);
+    const group = await this.getDataset(datasource, format);
     if (!storePath.startsWith(this.ICECHUNK_PREFIX) || !datasetPath) {
-      return await this.getVariable(group, variablePath);
+      return await this.getVariable(group, variablePath, format);
     }
 
     // For Icechunk stores getDataset returns the root group, so compose the
@@ -224,7 +243,7 @@ export class ZarrDataManager {
       }
       triedPaths.add(candidatePath);
       try {
-        return await this.getVariable(group, candidatePath);
+        return await this.getVariable(group, candidatePath, format);
       } catch (error) {
         lastResolutionError = error;
         // Try the next candidate path.
@@ -245,7 +264,8 @@ export class ZarrDataManager {
   ): Promise<zarr.Array<zarr.DataType, zarr.AsyncReadable>> {
     const array = await ZarrDataManager.getVariableInfo(
       ZarrDataManager.getDatasetSource(datasource!, variable),
-      variable
+      variable,
+      datasource.zarr_format
     );
     return array;
   }
@@ -282,12 +302,20 @@ export class ZarrDataManager {
       variable,
       crsVar
     );
-    return await this.getVariableInfo(resolved.datasource, resolved.variable);
+    return await this.getVariableInfo(
+      resolved.datasource,
+      resolved.variable,
+      datasource.zarr_format
+    );
   }
 
   static async findCRSVar(datasources: TSources, varname: string) {
     const source = this.getDatasetSource(datasources, varname);
-    const datavar = await ZarrDataManager.getVariableInfo(source, varname);
+    const datavar = await ZarrDataManager.getVariableInfo(
+      source,
+      varname,
+      datasources.zarr_format
+    );
     if (datavar.attrs?.grid_mapping) {
       return String(datavar.attrs.grid_mapping).split(":")[0];
     }
@@ -305,7 +333,8 @@ export class ZarrDataManager {
           );
           const coordVar = await this.getVariableInfo(
             resolved.datasource,
-            resolved.variable
+            resolved.variable,
+            datasources.zarr_format
           );
           if (coordVar.attrs?.crs_wkt || coordVar.attrs?.grid_mapping_name) {
             return coord;
@@ -416,7 +445,8 @@ export class ZarrDataManager {
 
     const datavar = await ZarrDataManager.getVariableInfo(
       ZarrDataManager.getDatasetSource(datasources, varname),
-      varname
+      varname,
+      datasources.zarr_format
     );
     return datavar.dimensionNames ?? [];
   }
