@@ -159,11 +159,13 @@ function resolveLatLonFromCoordinates(
         longitudeName = coordName;
       }
     }
-  } else {
+  }
+
+  if (!latitudeName || !longitudeName) {
     (datavar.dimensionNames as string[]).forEach((dimName: string) => {
-      if (isLatitudeName(dimName)) {
+      if (!latitudeName && isLatitudeName(dimName)) {
         latitudeName = dimName;
-      } else if (isLongitudeName(dimName)) {
+      } else if (!longitudeName && isLongitudeName(dimName)) {
         longitudeName = dimName;
       }
     });
