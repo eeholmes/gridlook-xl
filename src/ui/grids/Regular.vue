@@ -685,7 +685,7 @@ function nearestIndex(sorted: Float64Array, target: number): number {
 
   let lo = 0;
   let hi = sorted.length - 1;
-  const ascending = sorted[0] <= sorted[hi];
+  const ascending = sorted[0] < sorted[hi];
 
   while (lo < hi) {
     const mid = Math.floor((lo + hi) / 2);
@@ -727,6 +727,8 @@ function nearestLonIndex(lons: Float64Array, target: number): number {
   }
 
   const idx = nearestIndex(lons, adjustedTarget);
+  // Choose wrapped alternative direction based on which side of the longitude
+  // range midpoint the adjusted target falls on.
   const altTarget =
     adjustedTarget < (lo + hi) / 2
       ? adjustedTarget + FULL_CIRCLE_DEGREES
