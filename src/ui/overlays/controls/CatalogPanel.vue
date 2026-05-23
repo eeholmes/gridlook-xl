@@ -243,10 +243,13 @@ async function copyUrl(url: string) {
         :key="entry.url + '-' + i"
         class="catalog-entry panel-block"
       >
-        <button
+        <div
           class="catalog-entry-select"
-          type="button"
+          role="button"
+          tabindex="0"
           @click="select(entry)"
+          @keydown.enter.stop.prevent="select(entry)"
+          @keydown.space.stop.prevent="select(entry)"
         >
           <div class="catalog-entry-content">
             <div class="catalog-entry-header">
@@ -295,6 +298,20 @@ async function copyUrl(url: string) {
                     >
                       {{ entry.crs }}
                     </span>
+                    <button
+                      type="button"
+                      class="tag is-light is-small catalog-copy-tag"
+                      :aria-label="`Copy URL for ${displayTitle(entry)}`"
+                      @click.stop.prevent="copyUrl(entry.url)"
+                    >
+                      {{
+                        copiedUrl === entry.url
+                          ? "Copied URL"
+                          : copyFailedUrl === entry.url
+                            ? "Copy failed"
+                            : "Copy URL"
+                      }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -303,21 +320,7 @@ async function copyUrl(url: string) {
               {{ entry.description }}
             </p>
           </div>
-        </button>
-        <button
-          type="button"
-          class="button is-small is-light catalog-copy-button mt-2"
-          :aria-label="`Copy URL for ${displayTitle(entry)}`"
-          @click="copyUrl(entry.url)"
-        >
-          {{
-            copiedUrl === entry.url
-              ? "Copied URL"
-              : copyFailedUrl === entry.url
-                ? "Copy failed"
-                : "Copy URL"
-          }}
-        </button>
+        </div>
       </div>
     </div>
   </nav>
@@ -364,10 +367,10 @@ async function copyUrl(url: string) {
   &:hover {
     background-color: var(--bulma-link-light);
   }
-}
-
-.catalog-copy-button {
-  align-self: flex-start;
+  &:focus-visible {
+    outline: 2px solid var(--bulma-link);
+    outline-offset: 2px;
+  }
 }
 
 .catalog-entry-content {
@@ -401,6 +404,11 @@ async function copyUrl(url: string) {
   display: flex;
   gap: 0.25rem;
   flex-wrap: wrap;
+}
+
+.catalog-copy-tag {
+  cursor: pointer;
+  border: none;
 }
 
 .catalog-filters {
