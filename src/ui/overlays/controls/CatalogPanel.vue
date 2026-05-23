@@ -13,6 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const searchQuery = ref("");
+const copiedUrl = ref<string | null>(null);
 
 const filterFormat = ref("all");
 const filterAccess = ref("all");
@@ -115,6 +116,20 @@ function displayTitle(entry: TCatalogEntry): string {
 function select(entry: TCatalogEntry) {
   emit("select", entry);
 }
+
+async function copyUrl(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    copiedUrl.value = url;
+    window.setTimeout(() => {
+      if (copiedUrl.value === url) {
+        copiedUrl.value = null;
+      }
+    }, 1500);
+  } catch {
+    copiedUrl.value = null;
+  }
+}
 </script>
 
 <template>
@@ -214,62 +229,81 @@ function select(entry: TCatalogEntry) {
       >
         No datasets match your search.
       </p>
-      <button
+      <div
         v-for="(entry, i) in filteredAndSortedDatasets"
         :key="entry.url + '-' + i"
         class="catalog-entry panel-block"
-        type="button"
-        @click="select(entry)"
       >
-        <div class="catalog-entry-content">
-          <div class="catalog-entry-header">
-            <div class="catalog-entry-main">
-              <span class="icon is-small has-text-link">
-                <i class="fa-solid fa-database"></i>
-              </span>
-              <strong class="catalog-entry-title" :title="displayTitle(entry)">
-                {{ displayTitle(entry) }}
-              </strong>
+        <button
+          class="catalog-entry-select"
+          type="button"
+          @click="select(entry)"
+        >
+          <div class="catalog-entry-content">
+            <div class="catalog-entry-header">
+              <div class="catalog-entry-main">
+                <span class="icon is-small has-text-link mt-1">
+                  <i class="fa-solid fa-database"></i>
+                </span>
+                <div class="catalog-entry-text">
+                  <strong
+                    class="catalog-entry-title"
+                    :title="displayTitle(entry)"
+                  >
+                    {{ displayTitle(entry) }}
+                  </strong>
+                  <div class="catalog-entry-tags">
+                    <span
+                      v-if="entry.format"
+                      class="tag is-info is-light is-small"
+                    >
+                      {{ entry.format }}
+                    </span>
+                    <span
+                      v-if="entry.access"
+                      class="tag is-warning is-light is-small"
+                    >
+                      {{ entry.access }}
+                    </span>
+                    <span v-if="entry.layout" class="tag is-light is-small">
+                      {{ entry.layout }}
+                    </span>
+                    <span
+                      v-if="entry.grid"
+                      class="tag is-link is-light is-small"
+                    >
+                      {{ entry.grid }}
+                    </span>
+                    <span
+                      v-if="entry.convention"
+                      class="tag is-primary is-light is-small"
+                    >
+                      {{ entry.convention }}
+                    </span>
+                    <span
+                      v-if="entry.crs"
+                      class="tag is-success is-light is-small"
+                    >
+                      {{ entry.crs }}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="catalog-entry-tags">
-              <span v-if="entry.format" class="tag is-info is-light is-small">
-                {{ entry.format }}
-              </span>
-              <span
-                v-if="entry.access"
-                class="tag is-warning is-light is-small"
-              >
-                {{ entry.access }}
-              </span>
-              <span v-if="entry.layout" class="tag is-light is-small">
-                {{ entry.layout }}
-              </span>
-              <span v-if="entry.grid" class="tag is-link is-light is-small">
-                {{ entry.grid }}
-              </span>
-              <span
-                v-if="entry.convention"
-                class="tag is-primary is-light is-small"
-              >
-                {{ entry.convention }}
-              </span>
-              <span v-if="entry.crs" class="tag is-success is-light is-small">
-                {{ entry.crs }}
-              </span>
-            </div>
+            <p v-if="entry.description" class="help has-text-grey mt-1 mb-0">
+              {{ entry.description }}
+            </p>
           </div>
-          <p v-if="entry.description" class="help has-text-grey mt-1 mb-0">
-            {{ entry.description }}
-          </p>
-          <p
-            v-if="entry.title"
-            class="help has-text-grey-light mt-1 mb-0 catalog-entry-url"
-            :title="entry.url"
-          >
-            {{ entry.url }}
-          </p>
-        </div>
-      </button>
+        </button>
+        <button
+          type="button"
+          class="button is-small is-light catalog-copy-button mt-2"
+          :aria-label="`Copy URL for ${displayTitle(entry)}`"
+          @click="copyUrl(entry.url)"
+        >
+          {{ copiedUrl === entry.url ? "Copied URL" : "Copy URL" }}
+        </button>
+      </div>
     </div>
   </nav>
 </template>
@@ -293,7 +327,17 @@ function select(entry: TCatalogEntry) {
 }
 
 .catalog-entry {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
+  width: 100%;
+  border-bottom: 1px solid var(--bulma-border) !important;
+  &:last-child {
+    border-bottom: none !important;
+  }
+}
+
+.catalog-entry-select {
+  display: block;
   width: 100%;
   text-align: left;
   background: none;
@@ -301,13 +345,14 @@ function select(entry: TCatalogEntry) {
   cursor: pointer;
   font: inherit;
   color: inherit;
+  padding: 0;
   &:hover {
     background-color: var(--bulma-link-light) !important;
   }
-  border-bottom: 1px solid var(--bulma-border) !important;
-  &:last-child {
-    border-bottom: none !important;
-  }
+}
+
+.catalog-copy-button {
+  align-self: flex-start;
 }
 
 .catalog-entry-content {
@@ -317,27 +362,28 @@ function select(entry: TCatalogEntry) {
 
 .catalog-entry-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   min-width: 0;
 }
 
 .catalog-entry-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.catalog-entry-header .tag {
-  flex-shrink: 0;
+.catalog-entry-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .catalog-entry-tags {
   display: flex;
-  flex-shrink: 0;
   gap: 0.25rem;
   flex-wrap: wrap;
 }
@@ -350,16 +396,8 @@ function select(entry: TCatalogEntry) {
 
 .catalog-entry-title {
   display: block;
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   min-width: 0;
-}
-
-.catalog-entry-url {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
 }
 </style>

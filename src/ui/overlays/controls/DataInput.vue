@@ -106,6 +106,7 @@ onMounted(async () => {
     v-model="visible"
     title="Open dataset"
     footer-class="is-justify-content-flex-end"
+    card-class="open-dataset-modal"
   >
     <form id="load-dataset" @submit.prevent="setLocationHash">
       <div class="field">
@@ -167,3 +168,9 @@ onMounted(async () => {
     </span>
   </button>
 </template>
+
+<style scoped>
+:deep(.open-dataset-modal) {
+  width: min(96vw, 78rem);
+}
+</style>
