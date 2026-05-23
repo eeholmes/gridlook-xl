@@ -15,11 +15,17 @@ import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
+  computePolarStereoLatLon2D,
   createMissingOrFillPredicate,
   getDataBounds,
+  getCRSStringForXYVariable,
   getLatLonData,
+  getPolarStereoCRSParams,
+  isPolarStereographicCRS,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
+import { LAND_SEA_MASK_MODES } from "@/lib/layers/landSeaMask.ts";
+import { PROJECTION_TYPES } from "@/lib/projection/projectionUtils.ts";
 import {
   makeGpuProjectedMeshMaterial,
   updateProjectionUniforms,
@@ -60,6 +66,29 @@ const { paramDimIndices, paramDimMinBounds, paramDimMaxBounds } =
 
 const pendingUpdate = ref(false);
 const updatingData = ref(false);
+
+/** True when the loaded dataset uses a polar stereographic CRS. */
+const isPolarStereoData = ref(false);
+/** Aspect ratio (width / height = nx / ny) for the polar stereo grid canvas. */
+const polarAspectRatio = ref(1);
+/** Inline style for the canvas box — sets aspect-ratio when polar data is loaded. */
+const polarBoxStyle = computed(() =>
+  isPolarStereoData.value
+    ? { "aspect-ratio": String(polarAspectRatio.value) }
+    : {}
+);
+/** True when `isPolarStereoData` and the selected projection is incompatible with polar data. */
+const showPolarError = computed(() => {
+  if (!isPolarStereoData.value) {
+    return false;
+  }
+  const mode = projectionMode.value;
+  return (
+    mode !== PROJECTION_TYPES.NEARSIDE_PERSPECTIVE &&
+    mode !== PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT &&
+    mode !== PROJECTION_TYPES.AZIMUTHAL_HYBRID
+  );
+});
 
 let meshes: THREE.Mesh[] = [];
 
@@ -162,7 +191,31 @@ const colormapMaterial = computed(() => {
 
 async function datasourceUpdate() {
   clearHoverLookup();
+  isPolarStereoData.value = false;
   if (props.datasources !== undefined) {
+    // Detect polar stereographic CRS and auto-configure projection/mask.
+    try {
+      const crsStr = await getCRSStringForXYVariable(
+        props.datasources,
+        varnameSelector.value
+      );
+      if (isPolarStereographicCRS(crsStr)) {
+        isPolarStereoData.value = true;
+        // Set projection and mask immediately (before any await) so that
+        // showPolarError stays false while the hemisphere params are loading.
+        store.projectionMode = PROJECTION_TYPES.AZIMUTHAL_EQUIDISTANT;
+        // The global land/sea mask is not meaningful for a polar domain.
+        store.landSeaMaskChoice = LAND_SEA_MASK_MODES.OFF;
+        const { isNorthPole } = await getPolarStereoCRSParams(
+          props.datasources,
+          varnameSelector.value
+        );
+        store.projectionCenter = { lat: isNorthPole ? 90 : -90, lon: 0 };
+      }
+    } catch {
+      // CRS lookup may fail for datasets without a CRS variable or group-level
+      // projection attributes.  Treat as a non-polar curvilinear grid.
+    }
     await Promise.all([getData()]);
     updateLandSeaMask();
     updateColormap(meshes);
@@ -171,20 +224,68 @@ async function datasourceUpdate() {
 
 const BATCH_SIZE = 30;
 
-async function getGrid(
-  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
-  data: Float32Array
-) {
+/**
+ * Resolve the 2-D lat/lon coordinate arrays for a grid variable.
+ * Returns proper geographic coordinates whether the variable uses named
+ * lat/lon arrays (standard curvilinear) or x/y arrays with a polar
+ * stereographic CRS (computed via inverse projection).
+ */
+async function resolveLatLon2D(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+): Promise<{
+  latitudesData: Float64Array;
+  longitudesData: Float64Array;
+  nj: number;
+  ni: number;
+}> {
+  // Detect polar stereographic CRS.
+  let isPolarStereo = false;
+  try {
+    const crsStr = await getCRSStringForXYVariable(
+      props.datasources!,
+      varnameSelector.value
+    );
+    isPolarStereo = isPolarStereographicCRS(crsStr);
+  } catch {
+    // No CRS info available — treat as regular curvilinear.
+  }
+
+  if (isPolarStereo) {
+    const result = await computePolarStereoLatLon2D(
+      props.datasources!,
+      varnameSelector.value
+    );
+    // Update aspect ratio to match actual grid dimensions (nx / ny).
+    polarAspectRatio.value = result.nx / result.ny;
+    return {
+      latitudesData: result.latitudes2D,
+      longitudesData: result.longitudes2D,
+      nj: result.ny,
+      ni: result.nx,
+    };
+  }
+
   const { latitudes, longitudes } = await getLatLonData(
     datavar,
     props.datasources,
     varnameSelector.value
   );
-  const isMissingOrFill = createMissingOrFillPredicate(datavar);
-
-  const latitudesData = latitudes.data as Float64Array;
-  const longitudesData = longitudes!.data as Float64Array;
   const [nj, ni] = latitudes.shape;
+  return {
+    latitudesData: latitudes.data as Float64Array,
+    longitudesData: longitudes!.data as Float64Array,
+    nj,
+    ni,
+  };
+}
+
+async function getGrid(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
+  data: Float32Array
+) {
+  const { latitudesData, longitudesData, nj, ni } =
+    await resolveLatLon2D(datavar);
+  const isMissingOrFill = createMissingOrFillPredicate(datavar);
 
   // Detect cell orientation by analyzing the winding order of grid cells
   const shouldFlipLongitude = detectLongitudeFlip(
@@ -204,13 +305,7 @@ async function getGrid(
     shouldFlipLongitude
   );
 
-  return {
-    latitudesData,
-    longitudesData,
-    nj,
-    ni,
-    shouldFlipLongitude,
-  };
+  return { latitudesData, longitudesData, nj, ni, shouldFlipLongitude };
 }
 
 function detectLongitudeFlip(
@@ -755,7 +850,65 @@ defineExpose({ makeSnapshot, toggleRotate, applyCameraPreset });
 </script>
 
 <template>
-  <div ref="box" class="globe_box" tabindex="0" autofocus>
+  <div
+    ref="box"
+    class="globe_box"
+    :class="{ 'globe_box--polar': isPolarStereoData }"
+    :style="polarBoxStyle"
+    tabindex="0"
+    autofocus
+  >
     <canvas ref="canvas" class="globe_canvas"> </canvas>
+    <div v-if="showPolarError" class="polar-overlay">
+      <div class="polar-overlay-box">
+        <p class="polar-overlay-title">Polar stereographic dataset</p>
+        <p class="polar-overlay-body">
+          This dataset uses a polar stereographic coordinate reference system.
+          Please select <strong>Azimuthal Equidistant</strong> or
+          <strong>Nearside Perspective</strong> from the Projection dropdown to
+          display it correctly.
+        </p>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.globe_box--polar {
+  max-height: 100%;
+  max-width: 100%;
+  margin: auto;
+}
+
+.polar-overlay {
+  position: absolute;
+  inset: 0;
+  background: #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.polar-overlay-box {
+  background: rgba(30, 30, 40, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 1.5rem 2rem;
+  max-width: 480px;
+  text-align: center;
+  color: #e0e0e0;
+  pointer-events: none;
+}
+
+.polar-overlay-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.polar-overlay-body {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+</style>

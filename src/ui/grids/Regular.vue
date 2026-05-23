@@ -179,6 +179,21 @@ async function datasourceUpdate() {
 
 const isLatOnly = ref(false);
 const isGridGlobal = ref(false);
+
+/**
+ * Handles projected x/y coordinate grids inside getDims.
+ * Currently only supports Web Mercator (EPSG:3857).
+ * Polar stereographic datasets are routed to Curvilinear.vue instead.
+ */
+async function handleXYGridDims(): Promise<void> {
+  const { latitudes: lats, longitudes: lons } = await getXYCoordinatesAsLatLon(
+    props.datasources!,
+    varnameSelector.value
+  );
+  latitudes.value = lats;
+  longitudes.value = lons;
+}
+
 async function getDims() {
   const datavar = await getDataVar(varnameSelector.value, props.datasources!);
   if (!datavar) {
@@ -195,14 +210,12 @@ async function getDims() {
   const lastDim = dimensions[dimensions.length - 1];
   const secondLastDim = dimensions[dimensions.length - 2];
 
-  // Handle xy grids that use projected coordinates (e.g. EPSG:3857 with
-  // a spatial_ref CRS variable).  Convert x/y to lat/lon before rendering.
+  // Handle xy grids that use projected coordinates (e.g. EPSG:3857 Web Mercator).
+  // Polar stereographic datasets are routed to Curvilinear.vue by the grid
+  // type detector, so they will not reach this code path.
   if (isXName(lastDim) && isYName(secondLastDim)) {
     isLatOnly.value = false;
-    const { latitudes: lats, longitudes: lons } =
-      await getXYCoordinatesAsLatLon(props.datasources!, varnameSelector.value);
-    latitudes.value = lats;
-    longitudes.value = lons;
+    await handleXYGridDims();
     return;
   }
 

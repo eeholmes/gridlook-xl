@@ -58,9 +58,8 @@ export class ProjectionHelper {
 
   constructor(type: TProjectionType, center: TProjectionCenter) {
     this.type = type;
-    this.center = center;
     this.isFlat = type !== PROJECTION_TYPES.NEARSIDE_PERSPECTIVE;
-
+    this.center = center;
     this.initializeD3Projection();
   }
 
