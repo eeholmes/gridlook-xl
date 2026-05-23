@@ -307,6 +307,8 @@ function generateBatchGeometryData(
   const positionValues = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
   const latLonValues = new Float32Array(vertexCount * 2);
+  // UV v spans the full source texture latitude range, so we normalize
+  // against total latitude count instead of only this batch size.
   const latDenominator = Math.max(latitudes.length - 1, 1);
 
   const helper = projectionHelper.value;
@@ -382,6 +384,10 @@ function normalizeLongitudes(longitudes: Float64Array): Float64Array {
   return Float64Array.from(longitudes, (lon) => ((lon % 360) + 360) % 360);
 }
 
+/**
+ * Computes normalized/rotation-aware grid coordinate parameters used
+ * to build regular-grid render geometry batches.
+ */
 async function getRegularGridParameters() {
   const isRotated = props.isRotated;
   let longitudeValues = normalizeLongitudes(longitudes.value);
