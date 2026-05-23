@@ -93,7 +93,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "Fish-PACE Global Chlorophyll Vertical Structure",
+      "title": "Slow - Fish-PACE Global Chlorophyll Vertical Structure",
       "url": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/zarr",
       "format": "Zarr v3",
       "access": "direct",
