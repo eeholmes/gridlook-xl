@@ -1,64 +1,101 @@
-# gridlook with IceChunk
+# gridlook with IceChunk and grouping
 
-This is a fork of [GridLook](https://github.com/d70-t/gridlook). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. You can view any **CORS-enabled**, public Zarr dataset with GridLook. I have modified it to support Zarr v3 (better), Icechunk stores via [icechunk-js](https://github.com/EarthyScience/icechunk-js), and some number formating that it didn't support out of box. I also added a GitHub Action to serve the gridlook viewer on GitHub Pages.
+This is a heavily modified fork of [GridLook](https://github.com/d70-t/gridlook). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. You can view any **CORS-enabled**, public Zarr dataset with GridLook. I have modified it to support grouping and multiscale in Zarr v2 and v3, access via Icechunk using [icechunk-js](https://github.com/EarthyScience/icechunk-js), and polar grids. I also added a GitHub Action to serve the gridlook viewer on GitHub Pages.
 
 ![](docs/assets/showcase.webp)
 
 ## Try out my fork:
 
-https://eeholmes.github.io/gridlook.
+https://eeholmes.github.io/gridlook
 
-## Try on your own Zarr or Icechunk store:
+## Try on your own PUBLIC Zarr or Icechunk store:
 
-Put `icechunk+` in front of URI for icechunk stores.
+Put `icechunk+` in front of URI for icechunk stores. See the `public/static/catelog.json` file for examples. No authentication layer and CORS must be enabled.
 
 ```
-https://gridlook.pages.dev/#<STORE_URI>
-```
-If your S3 bucket url looks like this
-```
-s3://dynamical-noaa-gefs/noaa-gefs-forecast-35-day/v0.2.0.icechunk/
-```
-The URI is 
-```
-https://dynamical-noaa-gefs.s3.amazonaws.com/noaa-gefs-forecast-35-day/v0.2.0.icechunk/
-```
-If the data are on Source Coop, the url looks like this
-```
-https://data.source.coop/bkr/gfs/gfs.icechunk
+https://eeholmes.github.io/gridlook/#<STORE_URI>
 ```
 
 Gridlook can also load catalog JSON files that list multiple datasets. The catalog format and deployment options are documented in [docs/catalogs.md](docs/catalogs.md). A guide to the viewer keyboard, mouse, and touch interaction is available in [docs/Controls.md](docs/Controls.md).
 
 ## Examples
 
-These are mostly icechunk because that is what I am debugging. Not all of these work. This is for testing and coming up with the issues to make it work better. Zarr v2 works well from what I have tested. Zarr v3 works if metadata (zarr.json) is consolidated. Icechunk more or less works.
+Click on the folder icon in the top left. You can sort examples using format, access pattern, layout and grid.
 
-| Dataset | Format | Comments |
-|---|---|---|
-| OGS ARCO Ocean &emsp; [dataset info](https://registry.opendata.aws/ogs-arco-ocean/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#zarr+https://ogs-arco-ocean.s3.eu-south-1.amazonaws.com/dataset/tres=1d/res=0p25/levels=10/)<br>`https://ogs-arco-ocean.s3.eu-south-1.amazonaws.com/dataset/tres=1d/res=0p25/levels=10/` | Zarr v2 | Good |
-| CMIP6 HighResMIP model &emsp; [dataset info](https://console.cloud.google.com/marketplace/details/noaa-public/cmip6) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#https://storage.googleapis.com/cmip6/CMIP6/HighResMIP/MOHC/HadGEM3-GC31-HM/highresSST-present/r1i1p1f1/Amon/tas/gn/v20170831/)<br>`https://storage.googleapis.com/cmip6/CMIP6/HighResMIP/MOHC/HadGEM3-GC31-HM/highresSST-present/r1i1p1f1/Amon/tas/gn/v20170831/` | Zarr v2 | Good |
-| CHLA-Z &emsp; [dataset info](https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/index.html) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#zarr+https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/zarr)<br>`https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/zarr` | Zarr v3 | Loads but very slow and often hangs |
-| gfs &emsp; [dataset info](https://dynamical-noaa-gfs.s3.us-west-2.amazonaws.com/noaa-gfs-forecast/v0.2.7.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-noaa-gfs.s3.us-west-2.amazonaws.com/noaa-gfs-forecast/v0.2.7.icechunk/)<br>`https://dynamical-noaa-gfs.s3.us-west-2.amazonaws.com/noaa-gfs-forecast/v0.2.7.icechunk/` | Icechunk, Zarr v3 | Good |
-| dwd icon eu &emsp; [dataset info](https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/)<br>`https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/` | Icechunk, Zarr v3 | Good |
-| ECMWF AIFS single &emsp; [dataset info](https://dynamical-ecmwf-aifs-single.s3.us-west-2.amazonaws.com/ecmwf-aifs-single-forecast/v0.1.0.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-ecmwf-aifs-single.s3.us-west-2.amazonaws.com/ecmwf-aifs-single-forecast/v0.1.0.icechunk/)<br>`https://dynamical-ecmwf-aifs-single.s3.us-west-2.amazonaws.com/ecmwf-aifs-single-forecast/v0.1.0.icechunk/` | Icechunk, Zarr v3 | Good |
-| Met Office global wave &emsp; [dataset info](https://data.source.coop/bkr/metoffice/metoffice_global_wave.icechunk) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/bkr/metoffice/metoffice_global_wave.icechunk)<br>`https://data.source.coop/bkr/metoffice/metoffice_global_wave.icechunk` | Icechunk, Zarr v3 | Good |
-| Met Office deterministic 6-hourly &emsp; [dataset info](https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km_6hourly_24hr.icechunk) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km_6hourly_24hr.icechunk)<br>`https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km_6hourly_24hr.icechunk` | Icechunk, Zarr v3 | Good |
-| GEOS 15 min &emsp; [dataset info](https://data.source.coop/bkr/geos/geos_15min.icechunk) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/bkr/geos/geos_15min.icechunk)<br>`https://data.source.coop/bkr/geos/geos_15min.icechunk` | Icechunk, Zarr v3 | Good |
-| Met Office deterministic 11 hour &emsp; [dataset info](https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km_11hour.icechunk) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km_11hour.icechunk)<br>`https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km_11hour.icechunk` | Icechunk, Zarr v3 | Good |
-| Met Office deterministic 10 km &emsp; [dataset info](https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km.icechunk) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km.icechunk)<br>`https://data.source.coop/bkr/metoffice/metoffice_global_deterministic_10km.icechunk` | Icechunk, Zarr v3 | Good |
-| NOAA HRRR &emsp; [dataset info](https://dynamical-noaa-hrrr.s3.us-west-2.amazonaws.com/noaa-hrrr-analysis/v0.2.0.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-noaa-hrrr.s3.us-west-2.amazonaws.com/noaa-hrrr-analysis/v0.2.0.icechunk/)<br>`https://dynamical-noaa-hrrr.s3.us-west-2.amazonaws.com/noaa-hrrr-analysis/v0.2.0.icechunk/` | Icechunk, Zarr v3 | Slow load |
-| NOAA MRMS &emsp; [dataset info](https://dynamical-noaa-mrms.s3.amazonaws.com/noaa-mrms-conus-analysis-hourly/v0.3.0.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-noaa-mrms.s3.amazonaws.com/noaa-mrms-conus-analysis-hourly/v0.3.0.icechunk/)<br>`https://dynamical-noaa-mrms.s3.amazonaws.com/noaa-mrms-conus-analysis-hourly/v0.3.0.icechunk/` | Icechunk, Zarr v3 | Slow load |
-| ECMWF AIFS ensemble &emsp; [dataset info](https://dynamical-ecmwf-aifs-ens.s3.us-west-2.amazonaws.com/ecmwf-aifs-ens-forecast/v0.1.0.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-ecmwf-aifs-ens.s3.us-west-2.amazonaws.com/ecmwf-aifs-ens-forecast/v0.1.0.icechunk/)<br>`https://dynamical-ecmwf-aifs-ens.s3.us-west-2.amazonaws.com/ecmwf-aifs-ens-forecast/v0.1.0.icechunk/` | Icechunk, Zarr v3 | Slow load |
-| ECMWF IFS ensemble &emsp; [dataset info](https://dynamical-ecmwf-ifs-ens.s3.us-west-2.amazonaws.com/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-ecmwf-ifs-ens.s3.us-west-2.amazonaws.com/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.icechunk/)<br>`https://dynamical-ecmwf-ifs-ens.s3.us-west-2.amazonaws.com/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.icechunk/` | Icechunk, Zarr v3 | Slow load |
-| NOAA GEFS analysis &emsp; [dataset info](https://dynamical-noaa-gefs.s3.us-west-2.amazonaws.com/noaa-gefs-analysis/v0.1.2.icechunk/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-noaa-gefs.s3.us-west-2.amazonaws.com/noaa-gefs-analysis/v0.1.2.icechunk/)<br>`https://dynamical-noaa-gefs.s3.us-west-2.amazonaws.com/noaa-gefs-analysis/v0.1.2.icechunk/` | Icechunk, Zarr v3 | Slow load |
-| NOAA GEFS 35-day forecast &emsp; [dataset info](https://dynamical.org/catalog/noaa-gefs-forecast-35-day/) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://dynamical-noaa-gefs.s3.us-west-2.amazonaws.com/noaa-gefs-forecast-35-day/v0.2.0.icechunk/)<br>`https://dynamical-noaa-gefs.s3.us-west-2.amazonaws.com/noaa-gefs-forecast-35-day/v0.2.0.icechunk/` | Icechunk, Zarr v3 | No fetch / fails to load |
-| NOAA GEFS 35-day forecast &emsp; [dataset info](https://source.coop/dynamical/noaa-gefs-forecast-35-day) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr)<br>`https://data.dynamical.org/noaa/gefs/forecast-35-day/latest.zarr` | Zarr v3 | also fails to load |
-| ISMIP6 AIS &emsp; [dataset info](https://data.source.coop/englacial/ismip6/icechunk-ais) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/englacial/ismip6/icechunk-ais)<br>`https://data.source.coop/englacial/ismip6/icechunk-ais` | Icechunk, Zarr v3 | fails to load since grouped |
-| EarthMover ERA5 &emsp; [dataset info]() &emsp; [gridlook viewer]()<br>`https://earthmover-icechunk-era5.s3.us-east-1.amazonaws.com/era5_surface_aws/` | grouped Icechunk, Zarr v3 |fails to load since grouped |
-| ISMIP6 AIS grouped example &emsp; [dataset info](https://data.source.coop/englacial/ismip6/icechunk-ais/combined/AWI_PISM1/exp05) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/englacial/ismip6/icechunk-ais/combined/AWI_PISM1/exp05)<br>`https://data.source.coop/englacial/ismip6/icechunk-ais/combined/AWI_PISM1/exp05` | Icechunk, grouped Zarr v3 | fails to load, icechunk info is at root |
-| AOML 2012 &emsp; [dataset info](https://data.source.coop/bkr/aoml/aoml_2012.icechunk) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#icechunk+https://data.source.coop/bkr/aoml/aoml_2012.icechunk)<br>`https://data.source.coop/bkr/aoml/aoml_2012.icechunk` | Icechunk, Zarr v3 | Will not open. Not a grid. |
-| ERA5 single level &emsp; [dataset info](https://console.cloud.google.com/marketplace/product/bigquery-public-data/arco-era5) &emsp; [gridlook viewer](https://eeholmes.github.io/gridlook/#https://storage.googleapis.com/gcp-public-data-arco-era5/co/single-level-reanalysis.zarr-v2)<br>`https://storage.googleapis.com/gcp-public-data-arco-era5/co/single-level-reanalysis.zarr-v2` | Zarr v2 | no CORS |
+### `format`
+
+The `format` field describes the format that Gridlook actually reads and serves to the client. Currently this is `Zarr v2` or `Zarr v3`, even if the dataset originally came from NetCDF, GRIB, or another source format.  For example, an Icechunk repository may have been created from thousands of NetCDF files, but the client is still reading a Zarr hierarchy through the Icechunk access layer. In that case the format is still considered `Zarr v3`.
+
+### `access`
+
+The `access` field describes how the dataset is accessed or virtualized. A value of `direct` means the client is reading the dataset directly from object storage or HTTP as a normal Zarr store. Other values describe virtualization or transactional layers built on top of Zarr.
+
+Examples:
+- `direct` — standard object store or HTTP access
+- `icechunk` — transactional/versioned access using Icechunk
+- `kerchunk` — *to be added later* virtual references to existing files such as NetCDF or GRIB
+- `virtualizarr` — *to be added later* virtualized Zarr mappings
+
+### `layout`
+
+The `layout` field describes how arrays are organized within the dataset.
+
+#### `simple`
+
+A `simple` dataset contains a single-resolution dataset with one primary array layout. This is the most common type of Zarr store written directly from xarray or similar tools.
+
+#### `grouped`
+
+A `grouped` dataset contains multiple groups or subdatasets organized hierarchically. The groups may represent variables, experiments, ensemble members, model runs, or categories of data. Examples Zarr with multiple datasets and grouped scientific collections.
+
+#### `multiscale`
+
+A `multiscale` dataset is a pyramid containing multiple resolutions of the same data. Lower-resolution overview layers are included to support fast visualization, zooming, and progressive rendering. Multiscale datasets are commonly produced by GeoZarr workflows and visualization pipelines.
+
+The important distinction is that:
+- a `grouped` dataset organizes different datasets
+- a `multiscale` dataset organizes different resolutions of the same dataset
+
+A multiscale dataset is often internally grouped, but the groups specifically represent resolution levels.
+
+Examples include:
+- GeoZarr pyramids
+- image pyramids
+- multiresolution ocean model outputs
+
+### `grid`
+
+The `grid` field describes the spatial grid topology or projection used by the dataset.
+
+Examples:
+- `regular` — standard latitude/longitude rectilinear grid
+- `curvilinear` — warped 2D latitude/longitude grid
+- `irregular` — nonuniform or unstructured coordinates
+- `healpix` — HEALPix hierarchical equal-area grid
+- `triangular` — triangular mesh such as ICON model grids
+- `polar_stereographic`
+- `utm`
+
+---
+
+### `convention`
+
+The `convention` field describes optional higher-level metadata conventions layered on top of the storage format. A standard Zarr dataset may have no convention at all. In that case this field can be omitted or set to `null`. I wouldn't assume the 'convention' information is correct as I made a lot of guesses.
+
+Examples:
+- `GeoZarr` — geospatial conventions for Zarr datasets
+- `OME-Zarr` — conventions for microscopy and bioimaging datasets
+
+---
+
+### `crs`
+
+The `crs` field defines the coordinate reference system used by the dataset. This is definitely full of guesses!
+
+Examples:
+- `EPSG:4326` — WGS84 geographic coordinates
+- `EPSG:3031` — Antarctic polar stereographic
+- `EPSG:32637` — UTM zone 37N
 
 ## Developers
 
@@ -68,3 +105,41 @@ See `CONTRIBUTING.md` for instructions for running a local version. It is easy.
 
 To load datasets, you need to ensure [CORS](https://developer.mozilla.org/de/docs/Web/HTTP/Guides/CORS) is enabled on the server. If it is not, you might be out of luck unless you do something like make an icechunk version and host that someplace with CORS enabled (e.g. Source Coop).
 
+### Checking Whether a Dataset URL is CORS Enabled
+
+Gridlook loads datasets directly from the browser, so the dataset URL must allow Cross-Origin Resource Sharing (CORS). If CORS is not enabled, browsers will block requests even if the dataset itself is publicly accessible.
+
+A quick way to test this is with `curl`.
+
+Run:
+
+```bash
+curl -I <URL>
+```
+
+For example:
+
+```bash
+curl -I https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/zarr/zarr.json
+```
+
+A CORS-enabled response will usually include headers like:
+
+```text
+Access-Control-Allow-Origin: *
+```
+
+or:
+
+```text
+Access-Control-Allow-Origin: https://your-site.org
+```
+
+If this header is missing, browsers will likely block access to the dataset.
+
+### Notes
+
+- Public accessibility does not automatically mean CORS is enabled.
+- Object storage systems such as S3, GCS, Cloudflare R2, and Azure Blob Storage usually require separate CORS configuration.
+- Icechunk repositories must also expose CORS headers on the underlying HTTP endpoints.
+- Some datasets allow access to top-level metadata files but block chunk requests due to incomplete CORS settings.
