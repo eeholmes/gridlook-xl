@@ -423,7 +423,7 @@
       "crs": "EPSG:3031"
     },
     {
-      "title": "Broken, Semi - CarbonPlan Multi-Level Hybrid Virtual Icechunk",
+      "title": "CarbonPlan Multi-Level Hybrid Virtual Icechunk",
       "url": "icechunk+https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/pipeline/multi_level_virtual_hybrid_icechunk.icechunk",
       "format": "Zarr v3",
       "access": "icechunk",
