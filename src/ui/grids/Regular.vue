@@ -723,8 +723,8 @@ function nearestLonIndex(lons: Float64Array, target: number): number {
   const idx = nearestIndex(lons, adjustedTarget);
   const altTarget =
     adjustedTarget < (lo + hi) / 2
-      ? adjustedTarget + 360
-      : adjustedTarget - 360;
+      ? adjustedTarget + FULL_CIRCLE_DEGREES
+      : adjustedTarget - FULL_CIRCLE_DEGREES;
   const altIdx = nearestIndex(lons, altTarget);
 
   const dist = Math.abs(lons[idx] - adjustedTarget);
