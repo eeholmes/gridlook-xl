@@ -7,9 +7,11 @@ const props = withDefaults(
     modelValue: boolean;
     title: string;
     footerClass?: string;
+    cardClass?: string;
   }>(),
   {
     footerClass: "",
+    cardClass: "",
   }
 );
 
@@ -40,7 +42,7 @@ useEventListener(document, "keydown", (e: KeyboardEvent) => {
   <Teleport to="body">
     <div v-if="visible" class="modal is-active">
       <div class="modal-background" @click.self="close"></div>
-      <div class="modal-card">
+      <div class="modal-card" :class="cardClass">
         <header class="modal-card-head">
           <p class="modal-card-title">{{ title }}</p>
           <button

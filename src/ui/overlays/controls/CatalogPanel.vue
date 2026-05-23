@@ -13,20 +13,46 @@ const emit = defineEmits<{
 }>();
 
 const searchQuery = ref("");
+const copiedUrl = ref<string | null>(null);
+const copyFailedUrl = ref<string | null>(null);
+const COPY_FEEDBACK_DURATION_MS = 1500;
 
+const filterFormat = ref("all");
+const filterAccess = ref("all");
+const filterLayout = ref("all");
 const filterGrid = ref("all");
-const filterStore = ref("all");
+const filterConvention = ref("all");
 const filterCrs = ref("all");
 
-const uniqueGridTypes = computed(() =>
+const uniqueFormats = computed(() =>
   Array.from(
-    new Set(props.datasets.map((d) => d.tag).filter((v): v is string => !!v))
+    new Set(props.datasets.map((d) => d.format).filter((v): v is string => !!v))
   ).sort()
 );
 
-const uniqueStoreTypes = computed(() =>
+const uniqueAccessTypes = computed(() =>
   Array.from(
-    new Set(props.datasets.map((d) => d.store).filter((v): v is string => !!v))
+    new Set(props.datasets.map((d) => d.access).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueLayouts = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.layout).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueGridTypes = computed(() =>
+  Array.from(
+    new Set(props.datasets.map((d) => d.grid).filter((v): v is string => !!v))
+  ).sort()
+);
+
+const uniqueConventions = computed(() =>
+  Array.from(
+    new Set(
+      props.datasets.map((d) => d.convention).filter((v): v is string => !!v)
+    )
   ).sort()
 );
 
@@ -44,8 +70,11 @@ const filteredAndSortedDatasets = computed(() => {
       const haystack = [
         entry.title ?? "",
         entry.url,
-        entry.tag ?? "",
-        entry.store ?? "",
+        entry.format ?? "",
+        entry.access ?? "",
+        entry.layout ?? "",
+        entry.grid ?? "",
+        entry.convention ?? "",
         entry.crs ?? "",
         entry.description ?? "",
       ]
@@ -56,10 +85,22 @@ const filteredAndSortedDatasets = computed(() => {
       }
     }
 
-    if (filterGrid.value !== "all" && entry.tag !== filterGrid.value) {
+    if (filterFormat.value !== "all" && entry.format !== filterFormat.value) {
       return false;
     }
-    if (filterStore.value !== "all" && entry.store !== filterStore.value) {
+    if (filterAccess.value !== "all" && entry.access !== filterAccess.value) {
+      return false;
+    }
+    if (filterLayout.value !== "all" && entry.layout !== filterLayout.value) {
+      return false;
+    }
+    if (filterGrid.value !== "all" && entry.grid !== filterGrid.value) {
+      return false;
+    }
+    if (
+      filterConvention.value !== "all" &&
+      entry.convention !== filterConvention.value
+    ) {
       return false;
     }
     if (filterCrs.value !== "all" && entry.crs !== filterCrs.value) {
@@ -76,6 +117,27 @@ function displayTitle(entry: TCatalogEntry): string {
 
 function select(entry: TCatalogEntry) {
   emit("select", entry);
+}
+
+async function copyUrl(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    copyFailedUrl.value = null;
+    copiedUrl.value = url;
+    setTimeout(() => {
+      if (copiedUrl.value === url) {
+        copiedUrl.value = null;
+      }
+    }, COPY_FEEDBACK_DURATION_MS);
+  } catch {
+    copiedUrl.value = null;
+    copyFailedUrl.value = url;
+    setTimeout(() => {
+      if (copyFailedUrl.value === url) {
+        copyFailedUrl.value = null;
+      }
+    }, COPY_FEEDBACK_DURATION_MS);
+  }
 }
 </script>
 
@@ -105,6 +167,36 @@ function select(entry: TCatalogEntry) {
           dataset{{ datasets.length !== 1 ? "s" : "" }}
         </span>
         <div class="field is-grouped is-align-items-center mb-0">
+          <div v-if="uniqueFormats.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterFormat" title="Filter by format">
+                <option value="all">Format: All</option>
+                <option v-for="v in uniqueFormats" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div v-if="uniqueAccessTypes.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterAccess" title="Filter by access">
+                <option value="all">Access: All</option>
+                <option v-for="v in uniqueAccessTypes" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div v-if="uniqueLayouts.length > 0" class="control">
+            <div class="select is-small">
+              <select v-model="filterLayout" title="Filter by layout">
+                <option value="all">Layout: All</option>
+                <option v-for="v in uniqueLayouts" :key="v" :value="v">
+                  {{ v }}
+                </option>
+              </select>
+            </div>
+          </div>
           <div v-if="uniqueGridTypes.length > 0" class="control">
             <div class="select is-small">
               <select v-model="filterGrid" title="Filter by grid type">
@@ -115,11 +207,11 @@ function select(entry: TCatalogEntry) {
               </select>
             </div>
           </div>
-          <div v-if="uniqueStoreTypes.length > 0" class="control">
+          <div v-if="uniqueConventions.length > 0" class="control">
             <div class="select is-small">
-              <select v-model="filterStore" title="Filter by store type">
-                <option value="all">Store: All</option>
-                <option v-for="v in uniqueStoreTypes" :key="v" :value="v">
+              <select v-model="filterConvention" title="Filter by convention">
+                <option value="all">Convention: All</option>
+                <option v-for="v in uniqueConventions" :key="v" :value="v">
                   {{ v }}
                 </option>
               </select>
@@ -146,47 +238,77 @@ function select(entry: TCatalogEntry) {
       >
         No datasets match your search.
       </p>
-      <button
+      <div
         v-for="(entry, i) in filteredAndSortedDatasets"
         :key="entry.url + '-' + i"
         class="catalog-entry panel-block"
-        type="button"
-        @click="select(entry)"
       >
-        <div class="catalog-entry-content">
-          <div class="catalog-entry-header">
-            <div class="catalog-entry-main">
-              <span class="icon is-small has-text-link">
-                <i class="fa-solid fa-database"></i>
-              </span>
-              <strong class="catalog-entry-title" :title="displayTitle(entry)">
-                {{ displayTitle(entry) }}
-              </strong>
+        <button
+          class="catalog-entry-select"
+          type="button"
+          @click="select(entry)"
+        >
+          <div class="catalog-entry-content">
+            <div class="catalog-entry-header">
+              <div class="catalog-entry-main">
+                <span class="icon is-small has-text-link">
+                  <i class="fa-solid fa-database"></i>
+                </span>
+                <div class="catalog-entry-text">
+                  <strong
+                    class="catalog-entry-title"
+                    :title="displayTitle(entry)"
+                  >
+                    {{ displayTitle(entry) }}
+                  </strong>
+                </div>
+              </div>
             </div>
-            <div class="catalog-entry-tags">
-              <span v-if="entry.tag" class="tag is-link is-light is-small">
-                {{ entry.tag }}
-              </span>
-              <span v-if="entry.store" class="tag is-info is-light is-small">
-                {{ entry.store }}
-              </span>
-              <span v-if="entry.crs" class="tag is-success is-light is-small">
-                {{ entry.crs }}
-              </span>
-            </div>
+            <p v-if="entry.description" class="help has-text-grey mt-1 mb-0">
+              {{ entry.description }}
+            </p>
           </div>
-          <p v-if="entry.description" class="help has-text-grey mt-1 mb-0">
-            {{ entry.description }}
-          </p>
-          <p
-            v-if="entry.title"
-            class="help has-text-grey-light mt-1 mb-0 catalog-entry-url"
-            :title="entry.url"
-          >
-            {{ entry.url }}
-          </p>
+        </button>
+        <div class="catalog-entry-tags-row">
+          <div class="catalog-entry-tags">
+            <span v-if="entry.format" class="tag is-info is-light is-small">
+              {{ entry.format }}
+            </span>
+            <span v-if="entry.access" class="tag is-warning is-light is-small">
+              {{ entry.access }}
+            </span>
+            <span v-if="entry.layout" class="tag is-light is-small">
+              {{ entry.layout }}
+            </span>
+            <span v-if="entry.grid" class="tag is-link is-light is-small">
+              {{ entry.grid }}
+            </span>
+            <span
+              v-if="entry.convention"
+              class="tag is-primary is-light is-small"
+            >
+              {{ entry.convention }}
+            </span>
+            <span v-if="entry.crs" class="tag is-success is-light is-small">
+              {{ entry.crs }}
+            </span>
+            <button
+              type="button"
+              class="tag is-light is-small catalog-copy-tag"
+              :aria-label="`Copy URL for ${displayTitle(entry)}`"
+              @click.stop.prevent="copyUrl(entry.url)"
+            >
+              {{
+                copiedUrl === entry.url
+                  ? "Copied URL"
+                  : copyFailedUrl === entry.url
+                    ? "Copy failed"
+                    : "Copy URL"
+              }}
+            </button>
+          </div>
         </div>
-      </button>
+      </div>
     </div>
   </nav>
 </template>
@@ -210,7 +332,17 @@ function select(entry: TCatalogEntry) {
 }
 
 .catalog-entry {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
+  width: 100%;
+  border-bottom: 1px solid var(--bulma-border);
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.catalog-entry-select {
+  display: block;
   width: 100%;
   text-align: left;
   background: none;
@@ -218,12 +350,13 @@ function select(entry: TCatalogEntry) {
   cursor: pointer;
   font: inherit;
   color: inherit;
+  padding: 0;
   &:hover {
-    background-color: var(--bulma-link-light) !important;
+    background-color: var(--bulma-link-light);
   }
-  border-bottom: 1px solid var(--bulma-border) !important;
-  &:last-child {
-    border-bottom: none !important;
+  &:focus-visible {
+    outline: 2px solid var(--bulma-link);
+    outline-offset: 2px;
   }
 }
 
@@ -234,29 +367,49 @@ function select(entry: TCatalogEntry) {
 
 .catalog-entry-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   min-width: 0;
 }
 
 .catalog-entry-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.catalog-entry-header .tag {
-  flex-shrink: 0;
+.catalog-entry-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.catalog-entry-tags-row {
+  margin-top: 0.35rem;
 }
 
 .catalog-entry-tags {
   display: flex;
-  flex-shrink: 0;
   gap: 0.25rem;
   flex-wrap: wrap;
+}
+
+.catalog-copy-tag {
+  cursor: pointer;
+  border: none;
+  &:hover {
+    background-color: var(--bulma-link-light);
+  }
+  &:active {
+    filter: brightness(0.95);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--bulma-link);
+    outline-offset: 2px;
+  }
 }
 
 .catalog-filters {
@@ -267,16 +420,8 @@ function select(entry: TCatalogEntry) {
 
 .catalog-entry-title {
   display: block;
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   min-width: 0;
-}
-
-.catalog-entry-url {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
 }
 </style>

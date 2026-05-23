@@ -3,8 +3,11 @@ import axios from "axios";
 export type TCatalogEntry = {
   url: string;
   title?: string;
-  tag?: string;
-  store?: string;
+  format?: string;
+  access?: string;
+  layout?: string;
+  grid?: string;
+  convention?: string | null;
   crs?: string;
   description?: string;
 };
