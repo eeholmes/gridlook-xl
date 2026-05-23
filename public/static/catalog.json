@@ -3,7 +3,7 @@
   "title": "Zarr Test Dataset Catalog",
   "datasets": [
     {
-      "title": "ARCO-OCEAN Global Ocean Reanalysis (Daily 0.25°, 10 depth levels)",
+      "title": "ARCO-OCEAN Global Ocean Reanalysis Daily",
       "url": "https://ogs-arco-ocean.s3.eu-south-1.amazonaws.com/dataset/tres=1d/res=0p25/levels=10/",
       "format": "Zarr v2",
       "access": "direct",
@@ -13,7 +13,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "CMIP6 MPI-ESM1-2-HR Historical Near-Surface Air Temperature (~80 km)",
+      "title": "CMIP6 MPI-ESM1-2-HR Historical Near-Surface Air Temperature",
       "url": "https://storage.googleapis.com/cmip6/CMIP6/CMIP/MPI-M/MPI-ESM1-2-HR/historical/r1i1p1f1/Amon/tas/gn/v20190710/",
       "format": "Zarr v2",
       "access": "direct",
@@ -23,7 +23,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "CMIP6 PMIP IPSL-CM6A-LR Mid-Holocene Near-Surface Air Temperature (~250 km)",
+      "title": "CMIP6 PMIP IPSL-CM6A-LR Mid-Holocene Near-Surface Air Temperature",
       "url": "https://storage.googleapis.com/cmip6/CMIP6/PMIP/IPSL/IPSL-CM6A-LR/midHolocene/r1i1p1f3/Amon/tas/gr/v20180926/",
       "format": "Zarr v2",
       "access": "direct",
@@ -33,7 +33,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "CMIP6 HighResMIP HadGEM3-GC31-HM Near-Surface Air Temperature (~50 km)",
+      "title": "CMIP6 HighResMIP HadGEM3-GC31-HM Near-Surface Air Temperature",
       "url": "https://storage.googleapis.com/cmip6/CMIP6/HighResMIP/MOHC/HadGEM3-GC31-HM/highresSST-present/r1i1p1f1/Amon/tas/gn/v20170831/",
       "format": "Zarr v2",
       "access": "direct",
@@ -53,7 +53,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "NASA Multi-scale Ultra-high Resolution (MUR) Sea Surface Temperature (SST)",
+      "title": "Broken - NASA Multi-scale Ultra-high Resolution (MUR) Sea Surface Temperature (SST)",
       "url": "https://mur-sst.s3.us-west-2.amazonaws.com/zarr-v1/",
       "format": "Zarr v2",
       "access": "direct",
@@ -63,7 +63,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "CMIP6 NOAA GFDL-ESM4 Historical Sea Surface Temperature (~50 km Tripolar Grid)",
+      "title": "CMIP6 NOAA GFDL-ESM4 Historical Sea Surface Temperature",
       "url": "https://storage.googleapis.com/cmip6/CMIP6/CMIP/NOAA-GFDL/GFDL-ESM4/historical/r2i1p1f1/Omon/tos/gn/v20180701/",
       "format": "Zarr v2",
       "access": "direct",
@@ -73,7 +73,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "CMIP6 AWI-CM-1-1-MR Historical Daily Sea Surface Temperature (~25 km)",
+      "title": "CMIP6 AWI-CM-1-1-MR Historical Daily Sea Surface Temperature",
       "url": "https://cmip6-pds.s3.amazonaws.com/CMIP6/CMIP/AWI/AWI-CM-1-1-MR/historical/r1i1p1f1/Oday/tos/gn/v20181218/",
       "format": "Zarr v2",
       "access": "direct",
@@ -93,7 +93,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "Fish-PACE CHLA-Z — Global Chlorophyll Vertical Structure (0–200 m)",
+      "title": "Fish-PACE Global Chlorophyll Vertical Structure",
       "url": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/fish-pace-datasets/chla-z/zarr",
       "format": "Zarr v3",
       "access": "direct",
@@ -219,7 +219,7 @@
       "access": "icechunk",
       "convention": null,
       "layout": "simple",
-      "grid": "lambert_conformal",
+      "grid": "lambert",
       "crs": "EPSG:4326"
     },
     {
@@ -263,7 +263,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "ISMIP6 Antarctic Ice Sheet Model Intercomparison",
+      "title": "Broken - ISMIP6 Antarctic Ice Sheet Model Intercomparison",
       "url": "icechunk+https://data.source.coop/englacial/ismip6/icechunk-ais",
       "format": "Zarr v3",
       "access": "icechunk",
@@ -273,7 +273,7 @@
       "crs": "EPSG:3031"
     },
     {
-      "title": "ISMIP6 Antarctic Ice Sheet — AWI PISM1 Experiment 05",
+      "title": "Broken - ISMIP6 Antarctic Ice Sheet — AWI_PISM1 Exp 05",
       "url": "icechunk+https://data.source.coop/englacial/ismip6/icechunk-ais/combined/AWI_PISM1/exp05",
       "format": "Zarr v3",
       "access": "icechunk",
@@ -413,7 +413,7 @@
       "crs": "EPSG:3031"
     },
     {
-      "title": "CarbonPlan Polar Projection Example Dataset",
+      "title": "Broken - CarbonPlan Polar Projection Example Dataset",
       "url": "https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/polar-subset.zarr",
       "format": "Zarr v2",
       "access": "direct",
@@ -423,7 +423,7 @@
       "crs": "EPSG:3031"
     },
     {
-      "title": "CarbonPlan Multi-Level Hybrid Virtual Icechunk Example",
+      "title": "Broken, Semi - CarbonPlan Multi-Level Hybrid Virtual Icechunk",
       "url": "icechunk+https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/pipeline/multi_level_virtual_hybrid_icechunk.icechunk",
       "format": "Zarr v3",
       "access": "icechunk",
@@ -433,7 +433,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "Sentinel-2 L2A Surface Reflectance Tile T37TBG",
+      "title": "Broken - Sentinel-2 L2A Surface Reflectance Tile T37TBG",
       "url": "https://s3.explorer.eopf.copernicus.eu/esa-zarr-sentinel-explorer-fra/tests-output/sentinel-2-l2a/S2C_MSIL2A_20251218T083401_N0511_R021_T37TBG_20251218T112007.zarr/measurements/reflectance",
       "format": "Zarr v3",
       "access": "direct",
