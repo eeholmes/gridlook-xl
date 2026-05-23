@@ -16,6 +16,7 @@ import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
+  getMissingAndFillValues,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
@@ -361,7 +362,7 @@ function data2valueBuffer(
   const ncells = awaitedData.shape[0];
   const plotdata = castDataVarToFloat32(awaitedData.data);
 
-  const { missingValue, fillValue } = getDataBounds(datavar, plotdata);
+  const { missingValue, fillValue } = getMissingAndFillValues(datavar);
   mapMissingAndFillToNaN(plotdata, missingValue, fillValue);
   applyDisplayTransformToData(plotdata, transformMode.value);
   const { min, max } = getDataBounds(datavar, plotdata);

@@ -15,6 +15,7 @@ import {
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
+  getMissingAndFillValues,
   getXYCoordinatesAsLatLon,
   isLatitudeName,
   isLongitudeName,
@@ -781,7 +782,7 @@ async function fetchAndRenderData(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
 
-  const { missingValue, fillValue } = getDataBounds(datavar, rawData);
+  const { missingValue, fillValue } = getMissingAndFillValues(datavar);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
   rawData = applyDisplayTransformToData(rawData, transformMode.value);
   const { min, max } = getDataBounds(datavar, rawData);

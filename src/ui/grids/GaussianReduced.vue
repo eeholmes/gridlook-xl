@@ -17,6 +17,7 @@ import {
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
+  getMissingAndFillValues,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
@@ -464,7 +465,7 @@ async function fetchAndRenderData(
   const latitudesData = latitudes.data as Float64Array;
   const longitudesData = longitudes!.data as Float64Array;
 
-  let { missingValue, fillValue } = getDataBounds(datavar, rawData);
+  let { missingValue, fillValue } = getMissingAndFillValues(datavar);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
   rawData = applyDisplayTransformToData(rawData, transformMode.value);
   const { min, max } = getDataBounds(datavar, rawData);

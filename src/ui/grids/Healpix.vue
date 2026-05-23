@@ -17,6 +17,7 @@ import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
   getDataBounds,
+  getMissingAndFillValues,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
 import { ProjectionHelper } from "@/lib/projection/projectionUtils.ts";
@@ -390,10 +391,10 @@ async function getHealpixData(
     dataSlice
   );
 
-  const rawBounds = getDataBounds(datavar, dataSlice);
+  const rawMissingAndFill = getMissingAndFillValues(datavar);
   const { missingValue, fillValue } = normalizeHealpixMissingAndFill(
-    rawBounds.missingValue,
-    rawBounds.fillValue
+    rawMissingAndFill.missingValue,
+    rawMissingAndFill.fillValue
   );
   mapMissingAndFillToNaN(dataSlice, missingValue, fillValue);
   applyDisplayTransformToData(dataSlice, transformMode.value);
