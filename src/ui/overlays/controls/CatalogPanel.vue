@@ -243,7 +243,11 @@ async function copyUrl(url: string) {
         :key="entry.url + '-' + i"
         class="catalog-entry panel-block"
       >
-        <div class="catalog-entry-select" @click="select(entry)">
+        <button
+          class="catalog-entry-select"
+          type="button"
+          @click="select(entry)"
+        >
           <div class="catalog-entry-content">
             <div class="catalog-entry-header">
               <div class="catalog-entry-main">
@@ -257,61 +261,51 @@ async function copyUrl(url: string) {
                   >
                     {{ displayTitle(entry) }}
                   </strong>
-                  <div class="catalog-entry-tags">
-                    <span
-                      v-if="entry.format"
-                      class="tag is-info is-light is-small"
-                    >
-                      {{ entry.format }}
-                    </span>
-                    <span
-                      v-if="entry.access"
-                      class="tag is-warning is-light is-small"
-                    >
-                      {{ entry.access }}
-                    </span>
-                    <span v-if="entry.layout" class="tag is-light is-small">
-                      {{ entry.layout }}
-                    </span>
-                    <span
-                      v-if="entry.grid"
-                      class="tag is-link is-light is-small"
-                    >
-                      {{ entry.grid }}
-                    </span>
-                    <span
-                      v-if="entry.convention"
-                      class="tag is-primary is-light is-small"
-                    >
-                      {{ entry.convention }}
-                    </span>
-                    <span
-                      v-if="entry.crs"
-                      class="tag is-success is-light is-small"
-                    >
-                      {{ entry.crs }}
-                    </span>
-                    <button
-                      type="button"
-                      class="tag is-light is-small catalog-copy-tag"
-                      :aria-label="`Copy URL for ${displayTitle(entry)}`"
-                      @click.stop.prevent="copyUrl(entry.url)"
-                    >
-                      {{
-                        copiedUrl === entry.url
-                          ? "Copied URL"
-                          : copyFailedUrl === entry.url
-                            ? "Copy failed"
-                            : "Copy URL"
-                      }}
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
             <p v-if="entry.description" class="help has-text-grey mt-1 mb-0">
               {{ entry.description }}
             </p>
+          </div>
+        </button>
+        <div class="catalog-entry-tags-row">
+          <div class="catalog-entry-tags">
+            <span v-if="entry.format" class="tag is-info is-light is-small">
+              {{ entry.format }}
+            </span>
+            <span v-if="entry.access" class="tag is-warning is-light is-small">
+              {{ entry.access }}
+            </span>
+            <span v-if="entry.layout" class="tag is-light is-small">
+              {{ entry.layout }}
+            </span>
+            <span v-if="entry.grid" class="tag is-link is-light is-small">
+              {{ entry.grid }}
+            </span>
+            <span
+              v-if="entry.convention"
+              class="tag is-primary is-light is-small"
+            >
+              {{ entry.convention }}
+            </span>
+            <span v-if="entry.crs" class="tag is-success is-light is-small">
+              {{ entry.crs }}
+            </span>
+            <button
+              type="button"
+              class="tag is-light is-small catalog-copy-tag"
+              :aria-label="`Copy URL for ${displayTitle(entry)}`"
+              @click.stop.prevent="copyUrl(entry.url)"
+            >
+              {{
+                copiedUrl === entry.url
+                  ? "Copied URL"
+                  : copyFailedUrl === entry.url
+                    ? "Copy failed"
+                    : "Copy URL"
+              }}
+            </button>
           </div>
         </div>
       </div>
