@@ -396,6 +396,16 @@ async function copyUrl(url: string) {
 .catalog-copy-tag {
   cursor: pointer;
   border: none;
+  &:hover {
+    background-color: var(--bulma-link-light);
+  }
+  &:active {
+    filter: brightness(0.98);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--bulma-link);
+    outline-offset: 2px;
+  }
 }
 
 .catalog-filters {
