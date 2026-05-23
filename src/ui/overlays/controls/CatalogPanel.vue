@@ -14,6 +14,7 @@ const emit = defineEmits<{
 
 const searchQuery = ref("");
 const copiedUrl = ref<string | null>(null);
+const copyFailedUrl = ref<string | null>(null);
 
 const filterFormat = ref("all");
 const filterAccess = ref("all");
@@ -120,6 +121,7 @@ function select(entry: TCatalogEntry) {
 async function copyUrl(url: string) {
   try {
     await navigator.clipboard.writeText(url);
+    copyFailedUrl.value = null;
     copiedUrl.value = url;
     setTimeout(() => {
       if (copiedUrl.value === url) {
@@ -128,6 +130,12 @@ async function copyUrl(url: string) {
     }, 1500);
   } catch {
     copiedUrl.value = null;
+    copyFailedUrl.value = url;
+    setTimeout(() => {
+      if (copyFailedUrl.value === url) {
+        copyFailedUrl.value = null;
+      }
+    }, 1500);
   }
 }
 </script>
@@ -301,7 +309,13 @@ async function copyUrl(url: string) {
           :aria-label="`Copy URL for ${displayTitle(entry)}`"
           @click="copyUrl(entry.url)"
         >
-          {{ copiedUrl === entry.url ? "Copied URL" : "Copy URL" }}
+          {{
+            copiedUrl === entry.url
+              ? "Copied URL"
+              : copyFailedUrl === entry.url
+                ? "Copy failed"
+                : "Copy URL"
+          }}
         </button>
       </div>
     </div>
