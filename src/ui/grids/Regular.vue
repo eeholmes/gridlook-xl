@@ -633,11 +633,17 @@ async function buildHoverIndex(
       }
 
       const latIdx = nearestIndex(lats, queryLat);
+      if (latIdx < 0) {
+        return null;
+      }
       if (isLatOnly.value) {
         return { lat: lats[latIdx], lon: 0, value: rawData[latIdx] };
       }
 
       const lonIdx = nearestLonIndex(lons, queryLon);
+      if (lonIdx < 0) {
+        return null;
+      }
       const rawLat = lats[latIdx];
       const rawLon = lons[lonIdx];
       const { lat, lon } = rotPole
@@ -654,12 +660,19 @@ async function buildHoverIndex(
 }
 
 function nearestIndex(sorted: Float64Array, target: number): number {
+  if (sorted.length === 0) {
+    return -1;
+  }
+  if (sorted.length === 1) {
+    return 0;
+  }
+
   let lo = 0;
   let hi = sorted.length - 1;
   const ascending = sorted[0] <= sorted[hi];
 
   while (lo < hi) {
-    const mid = (lo + hi) >> 1;
+    const mid = Math.floor((lo + hi) / 2);
     if (ascending ? sorted[mid] < target : sorted[mid] > target) {
       lo = mid + 1;
     } else {
@@ -677,6 +690,13 @@ function nearestIndex(sorted: Float64Array, target: number): number {
 }
 
 function nearestLonIndex(lons: Float64Array, target: number): number {
+  if (lons.length === 0) {
+    return -1;
+  }
+  if (lons.length === 1) {
+    return 0;
+  }
+
   const lo = lons[0];
   const hi = lons[lons.length - 1];
 
@@ -696,6 +716,7 @@ function nearestLonIndex(lons: Float64Array, target: number): number {
 
   const dist = Math.abs(lons[idx] - adjustedTarget);
   let altDist = Math.abs(lons[altIdx] - altTarget);
+  // Normalize wrapped distance when the alternative crosses the antimeridian.
   if (altDist > 180) {
     altDist = 360 - altDist;
   }
