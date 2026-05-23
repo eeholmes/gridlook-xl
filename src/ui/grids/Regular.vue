@@ -286,6 +286,7 @@ function isLongitudeGlobal(longitudes: Float64Array): boolean {
 
 /**
  * Generates vertices, UVs, and lat/lon coordinates for one latitude batch.
+ * `latStart` and `latEnd` are global latitude row indices into `latitudes`.
  */
 function generateBatchVerticesAndUVs(
   latitudes: Float64Array,
@@ -379,7 +380,7 @@ function normalizeLongitudes(longitudes: Float64Array): Float64Array {
   return Float64Array.from(longitudes, (lon) => ((lon % 360) + 360) % 360);
 }
 
-async function getGridParams() {
+async function getRegularGridParameters() {
   const isRotated = props.isRotated;
   let longitudeValues = normalizeLongitudes(longitudes.value);
   let latitudeValues = latitudes.value;
@@ -494,7 +495,7 @@ async function makeGeometry() {
       latCount,
       lonCount,
       isGlobal,
-    } = await getGridParams();
+    } = await getRegularGridParameters();
 
     const totalBatches = Math.ceil((latCount - 1) / BATCH_SIZE);
     cleanupMeshes(totalBatches);
@@ -613,6 +614,10 @@ async function getDimensionValues(
   return dimValues;
 }
 
+/**
+ * Builds a regular-grid hover index using binary search over lat/lon axes,
+ * avoiding full sample materialization for each data refresh.
+ */
 async function buildHoverIndex(
   rawData: Float32Array
 ): Promise<TGeoSampleIndex> {
@@ -659,6 +664,9 @@ async function buildHoverIndex(
   };
 }
 
+/**
+ * Finds nearest index in a sorted (ascending or descending) 1D array.
+ */
 function nearestIndex(sorted: Float64Array, target: number): number {
   if (sorted.length === 0) {
     return -1;
@@ -689,6 +697,9 @@ function nearestIndex(sorted: Float64Array, target: number): number {
   return lo;
 }
 
+/**
+ * Finds nearest longitude index with wrap-aware fallback across antimeridian.
+ */
 function nearestLonIndex(lons: Float64Array, target: number): number {
   if (lons.length === 0) {
     return -1;
