@@ -413,7 +413,7 @@
       "crs": "EPSG:3031"
     },
     {
-      "title": "Broken - CarbonPlan Polar Projection Example Dataset",
+      "title": "Slow - CarbonPlan Polar Projection Example Dataset",
       "url": "https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/polar-subset.zarr",
       "format": "Zarr v2",
       "access": "direct",
