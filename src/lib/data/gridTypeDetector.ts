@@ -160,11 +160,18 @@ async function determineGridTypeFromData(
   // Fetch metadata only — no chunk data downloaded at this stage.
   // This avoids potentially hundreds of HTTP range-requests for large
   // curvilinear lat/lon arrays (e.g. 362×360 or 830 K-cell grids).
-  const { latitudesVar, longitudesVar } = await getLatLonVariableInfo(
-    datavar,
-    datasources!,
-    varnameSelector
-  );
+  let latitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable> | null = null;
+  let longitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable> | null =
+    null;
+  try {
+    ({ latitudesVar, longitudesVar } = await getLatLonVariableInfo(
+      datavar,
+      datasources!,
+      varnameSelector
+    ));
+  } catch {
+    return null;
+  }
   if (!latitudesVar || longitudesVar === null) {
     return null; // Cannot determine grid type without both lat and lon
   }
@@ -231,12 +238,6 @@ export async function getGridType(
       return GRID_TYPES.REGULAR;
     }
 
-    // Projected xy grids (e.g. EPSG:3857 with spatial_ref): handled as
-    // regular grids after converting x/y coordinates to lat/lon.
-    if (checkXYGridFromDimensions(dimensions)) {
-      return GRID_TYPES.REGULAR;
-    }
-
     const dataGridType = await determineGridTypeFromData(
       datavar,
       datasources,
@@ -244,6 +245,14 @@ export async function getGridType(
     );
     if (dataGridType) {
       return dataGridType;
+    }
+
+    // Projected xy grids (e.g. EPSG:3857 with spatial_ref): handled as
+    // regular grids after converting x/y coordinates to lat/lon.
+    // Kept as a fallback so curvilinear datasets with x/y dimensions and
+    // explicit 2-D lat/lon coordinates are not misclassified.
+    if (checkXYGridFromDimensions(dimensions)) {
+      return GRID_TYPES.REGULAR;
     }
     logError("No matching grid type found", "Could not determine grid type");
     return GRID_TYPES.ERROR;
