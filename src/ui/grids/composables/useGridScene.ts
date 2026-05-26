@@ -88,11 +88,11 @@ export function useGridScene(options: UseGridSceneOptions) {
   // the next time anything triggers a render (click, bounds change, etc.).
   let idleFrameCount = 0;
   const IDLE_FRAMES_BEFORE_STOP = 30; // ~500 ms at 60 fps – outlasts any realistic damping
-  const WHEEL_END_DELAY_MS = 120;
+  const WHEEL_INTERACTION_TIMEOUT_MS = 120;
   const debouncedEndWheelInteraction = useDebounceFn(() => {
     wheelActive = false;
     animationLoop();
-  }, WHEEL_END_DELAY_MS);
+  }, WHEEL_INTERACTION_TIMEOUT_MS);
   let targetOffset = 0;
   let isInitialLoad = true;
   let isInMotion = false;

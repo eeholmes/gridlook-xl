@@ -26,7 +26,7 @@ import {
   type THistogramSummary,
 } from "@/utils/histogram.ts";
 
-type TVoidFunction = () => void;
+type VoidCallback = () => void;
 
 /* eslint-disable-next-line max-lines-per-function */
 export function useSharedGridLogic() {
@@ -55,21 +55,21 @@ export function useSharedGridLogic() {
 
   const cameraState = useGridCameraState();
   const isSceneInMotion = ref(false);
-  const projectionChangeCallbacks: TVoidFunction[] = [];
-  const motionStateCallbacks: TVoidFunction[] = [];
-  const colormapChangeCallbacks: TVoidFunction[] = [];
+  const projectionChangeCallbacks: VoidCallback[] = [];
+  const motionStateCallbacks: VoidCallback[] = [];
+  const colormapChangeCallbacks: VoidCallback[] = [];
   let updateCoastlines: () => Promise<void> = async () => {};
   let updateGraticules: () => Promise<void> = async () => {};
 
-  function onProjectionChange(callback: TVoidFunction) {
+  function onProjectionChange(callback: VoidCallback) {
     projectionChangeCallbacks.push(callback);
   }
 
-  function onMotionStateChange(callback: TVoidFunction) {
+  function onMotionStateChange(callback: VoidCallback) {
     motionStateCallbacks.push(callback);
   }
 
-  function onColormapChange(callback: TVoidFunction) {
+  function onColormapChange(callback: VoidCallback) {
     colormapChangeCallbacks.push(callback);
   }
 

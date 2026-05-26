@@ -17,14 +17,21 @@ type TUrlParameterStoreKeys = keyof ReturnType<
   typeof useUrlParameterStore
 >["$state"];
 
-type TUrlSyncEntry = {
-  key: TGlobeControlStoreKeys | TUrlParameterStoreKeys;
+type TGlobeUrlSyncEntry = {
+  key: TGlobeControlStoreKeys;
   param: TURLParameterValues;
   transform?: (value: unknown) => string | number;
   skip?: (value: unknown) => boolean;
 };
 
-const GLOBE_URL_SYNC_MAP: TUrlSyncEntry[] = [
+type TUrlParameterSyncEntry = {
+  key: TUrlParameterStoreKeys;
+  param: TURLParameterValues;
+  transform?: (value: unknown) => string | number;
+  skip?: (value: unknown) => boolean;
+};
+
+const GLOBE_URL_SYNC_MAP: TGlobeUrlSyncEntry[] = [
   {
     key: "varnameSelector",
     param: URL_PARAMETERS.VARNAME,
@@ -55,7 +62,7 @@ const GLOBE_URL_SYNC_MAP: TUrlSyncEntry[] = [
   { key: "projectionMode", param: URL_PARAMETERS.PROJECTION },
 ];
 
-const URL_PARAM_SYNC_MAP: TUrlSyncEntry[] = [
+const URL_PARAM_SYNC_MAP: TUrlParameterSyncEntry[] = [
   {
     key: "paramCameraState",
     param: URL_PARAMETERS.CAMERA_STATE,
@@ -109,7 +116,7 @@ export function useUrlSync() {
 
   for (const { key, param, transform, skip } of GLOBE_URL_SYNC_MAP) {
     watch(
-      () => (store as unknown as Record<string, unknown>)[key],
+      () => store[key],
       (value) => {
         if (skip?.(value)) {
           return;
@@ -123,7 +130,7 @@ export function useUrlSync() {
 
   for (const { key, param, transform, skip } of URL_PARAM_SYNC_MAP) {
     watch(
-      () => (urlParameterStore as unknown as Record<string, unknown>)[key],
+      () => urlParameterStore[key],
       (value) => {
         if (skip?.(value)) {
           return;
