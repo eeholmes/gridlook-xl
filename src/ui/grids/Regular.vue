@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { storeToRefs } from "pinia";
 import * as THREE from "three";
-import { computed, onBeforeMount, ref, watch } from "vue";
+import { onBeforeMount, ref, watch } from "vue";
 import type * as zarr from "zarrita";
 
 import { useGridHoverLookup } from "./composables/gridHoverUtils.ts";
@@ -51,12 +51,9 @@ const {
   transformMode,
   varnameSelector,
   invertColormap,
-  posterizeLevels,
   selection,
   isInitializingVariable,
   varinfo,
-  projectionMode,
-  projectionCenter,
 } = storeToRefs(store);
 
 const urlParameterStore = useUrlParameterStore();
@@ -76,6 +73,9 @@ const {
   updateColormap,
   updateHistogram,
   projectionHelper,
+  onProjectionChange,
+  onMotionStateChange,
+  onColormapChange,
   canvas,
   box,
   hoveredGeoPoint,
@@ -94,6 +94,13 @@ const BATCH_SIZE = 60;
 const HALF_CIRCLE_DEGREES = 180;
 const FULL_CIRCLE_DEGREES = 360;
 let meshes: THREE.Mesh[] = [];
+
+onColormapChange(() => {
+  updateColormap(meshes);
+});
+
+onProjectionChange(updateMeshProjectionUniforms);
+onMotionStateChange(updateMeshProjectionUniforms);
 watch(
   () => varnameSelector.value,
   async (nextVarname, previousVarname) => {
@@ -129,31 +136,6 @@ watch(
   () => {
     datasourceUpdate();
   }
-);
-
-const bounds = computed(() => {
-  return selection.value;
-});
-
-watch(
-  [
-    () => bounds.value,
-    () => invertColormap.value,
-    () => colormap.value,
-    () => posterizeLevels.value,
-    () => store.hideLowerBound,
-  ],
-  () => {
-    updateColormap(meshes);
-  }
-);
-
-watch(
-  [() => projectionMode.value, () => projectionCenter.value],
-  () => {
-    updateMeshProjectionUniforms();
-  },
-  { deep: true }
 );
 
 function updateMeshProjectionUniforms() {
@@ -593,8 +575,8 @@ function makeMaterial(rawData: Float32Array) {
     longitudes.value.length,
     isGridGlobal.value
   );
-  const low = bounds.value?.low as number;
-  const high = bounds.value?.high as number;
+  const low = selection.value?.low as number;
+  const high = selection.value?.high as number;
   const { addOffset, scaleFactor } = getColormapScaleOffset(
     low,
     high,
