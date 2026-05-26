@@ -39,14 +39,8 @@ function clampLatitude(lat: number) {
 
 /**
  * Creates a nearest-neighbor lookup for geographic samples.
- * The bucket-size parameter is retained for caller compatibility with the
- * previous bucketed implementation.
  */
-export function createGeoSampleIndex(
-  samples: TGeoSample[],
-  bucketSizeDegrees = 5
-): TGeoSampleIndex {
-  void bucketSizeDegrees;
+export function createGeoSampleIndex(samples: TGeoSample[]): TGeoSampleIndex {
   const normalizedSamples = samples.map((sample) => ({
     ...sample,
     lat: clampLatitude(sample.lat),

@@ -333,7 +333,6 @@ class GpuProjectedMaskRenderer {
       },
       vertexShader: gpuProjectedMaskVertexShader,
       fragmentShader: gpuProjectedMaskFragmentShader,
-      transparent: false,
       side: THREE.FrontSide,
       depthWrite: false,
       // depthTest: false so rendering order is controlled solely by renderOrder.
