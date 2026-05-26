@@ -3,7 +3,7 @@ import * as zarr from "zarrita";
 import { ZarrDataManager } from "./ZarrDataManager.ts";
 import {
   getCRSStringForXYVariable,
-  getLatLonData,
+  getLatLonVariableInfo,
   isLatitudeName,
   isLongitudeName,
   isPolarStereographicCRS,
@@ -74,19 +74,19 @@ function checkRegularRotatedGrid(
 }
 
 function checkCurvilinear(
-  latitudesVar: zarr.Chunk<zarr.DataType>,
-  longitudesVar: zarr.Chunk<zarr.DataType>
+  latitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
+  longitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
 ) {
-  // const latitudes = latitudesVar.data as Float64Array;
-  // const longitudes = longitudesVar.data as Float64Array;
-
-  // const uniqueLatsNum = new Set(latitudes).size;
-  // const uniqueLonsNum = new Set(longitudes).size;
-
   return latitudesVar.shape.length === 2 && longitudesVar.shape.length === 2;
 }
 
 function checkGaussianGrid(latitudes: Float64Array, longitudes: Float64Array) {
+  // Quick O(1) check: a Gaussian-reduced grid stores all cells for a given
+  // latitude row consecutively, so the first two entries share the same lat.
+  // If they differ, this is definitely not a Gaussian-reduced grid.
+  if (latitudes.length < 2 || latitudes[0] !== latitudes[1]) {
+    return false;
+  }
   const uniqueLatsNum = new Set(latitudes).size;
   const uniqueLonsNum = new Set(longitudes).size;
 
@@ -157,20 +157,32 @@ async function determineGridTypeFromData(
   datasources: TSources | undefined,
   varnameSelector: string
 ): Promise<T_GRID_TYPES | null> {
-  const { latitudes, longitudes } = await getLatLonData(
+  // Fetch metadata only — no chunk data downloaded at this stage.
+  // This avoids potentially hundreds of HTTP range-requests for large
+  // curvilinear lat/lon arrays (e.g. 362×360 or 830 K-cell grids).
+  const { latitudesVar, longitudesVar } = await getLatLonVariableInfo(
     datavar,
-    datasources,
+    datasources!,
     varnameSelector
   );
-  if (latitudes === null || longitudes === null) {
-    return null; // Cannot determine grid type without lat/lon data
+  if (!latitudesVar || longitudesVar === null) {
+    return null; // Cannot determine grid type without both lat and lon
   }
+
+  // Curvilinear grids have 2-D lat/lon arrays — detectable from shape alone.
+  if (checkCurvilinear(latitudesVar, longitudesVar)) {
+    return GRID_TYPES.CURVILINEAR;
+  }
+
+  // For Gaussian-reduced vs. irregular we need actual coordinate values.
+  // Fetch both arrays in parallel to minimise wall-clock time.
+  const [latitudes, longitudes] = await Promise.all([
+    ZarrDataManager.getVariableDataFromArray(latitudesVar),
+    ZarrDataManager.getVariableDataFromArray(longitudesVar),
+  ]);
   const latitudesData = latitudes.data as Float64Array;
   const longitudesData = longitudes.data as Float64Array;
 
-  if (checkCurvilinear(latitudes, longitudes)) {
-    return GRID_TYPES.CURVILINEAR;
-  }
   if (checkGaussianGrid(latitudesData, longitudesData)) {
     return GRID_TYPES.GAUSSIAN_REDUCED;
   }
