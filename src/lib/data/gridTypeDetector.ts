@@ -157,6 +157,9 @@ async function determineGridTypeFromData(
   datasources: TSources | undefined,
   varnameSelector: string
 ): Promise<T_GRID_TYPES | null> {
+  if (!datasources) {
+    return null;
+  }
   // Fetch metadata only — no chunk data downloaded at this stage.
   // This avoids potentially hundreds of HTTP range-requests for large
   // curvilinear lat/lon arrays (e.g. 362×360 or 830 K-cell grids).
@@ -166,7 +169,7 @@ async function determineGridTypeFromData(
   try {
     ({ latitudesVar, longitudesVar } = await getLatLonVariableInfo(
       datavar,
-      datasources!,
+      datasources,
       varnameSelector
     ));
   } catch {
