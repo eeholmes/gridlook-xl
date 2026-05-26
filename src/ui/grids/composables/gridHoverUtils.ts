@@ -37,12 +37,15 @@ function clampLatitude(lat: number) {
   return Math.max(-90, Math.min(90, lat));
 }
 
+/**
+ * Creates a nearest-neighbor lookup for geographic samples.
+ * The bucket-size parameter is retained for caller compatibility with the
+ * previous bucketed implementation.
+ */
 export function createGeoSampleIndex(
   samples: TGeoSample[],
   bucketSizeDegrees = 5
 ): TGeoSampleIndex {
-  // Keep the existing parameter for caller compatibility while the implementation
-  // now delegates nearest-neighbor lookup to kdbush/geokdbush.
   void bucketSizeDegrees;
   const normalizedSamples = samples.map((sample) => ({
     ...sample,

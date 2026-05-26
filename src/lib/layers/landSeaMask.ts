@@ -171,12 +171,11 @@ class GpuProjectedMaskRenderer {
         getProjectionTypeFromMode(projectionHelper.type),
         projectionHelper.center
       );
-      material.transparent = !isGlobeMaskMode(mode);
     } else {
       geometry = this.createGlobeGeometry();
       material = this.createGlobeMaterial(texture);
-      material.transparent = !isGlobeMaskMode(mode);
     }
+    material.transparent = !isGlobeMaskMode(mode);
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = "mask";
