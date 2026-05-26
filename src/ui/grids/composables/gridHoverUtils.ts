@@ -41,6 +41,8 @@ export function createGeoSampleIndex(
   samples: TGeoSample[],
   bucketSizeDegrees = 5
 ): TGeoSampleIndex {
+  // Keep the existing parameter for caller compatibility while the implementation
+  // now delegates nearest-neighbor lookup to kdbush/geokdbush.
   void bucketSizeDegrees;
   const normalizedSamples = samples.map((sample) => ({
     ...sample,
