@@ -1,4 +1,4 @@
-import debounce from "lodash.debounce";
+import { watchDebounced } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { watch } from "vue";
 
@@ -10,22 +10,77 @@ import {
 import { useUrlParameterStore } from "./paramStore.ts";
 import { useGlobeControlStore } from "./store.ts";
 
+type TGlobeControlStoreKeys = keyof ReturnType<
+  typeof useGlobeControlStore
+>["$state"];
+type TUrlParameterStoreKeys = keyof ReturnType<
+  typeof useUrlParameterStore
+>["$state"];
+
+type TGlobeUrlSyncEntry = {
+  key: TGlobeControlStoreKeys;
+  param: TURLParameterValues;
+  transform?: (value: unknown) => string | number;
+  skip?: (value: unknown) => boolean;
+};
+
+type TUrlParameterSyncEntry = {
+  key: TUrlParameterStoreKeys;
+  param: TURLParameterValues;
+  transform?: (value: unknown) => string | number;
+  skip?: (value: unknown) => boolean;
+};
+
+const GLOBE_URL_SYNC_MAP: TGlobeUrlSyncEntry[] = [
+  {
+    key: "varnameSelector",
+    param: URL_PARAMETERS.VARNAME,
+    skip: (value) => !value || value === "-",
+  },
+  { key: "colormap", param: URL_PARAMETERS.COLORMAP },
+  {
+    key: "invertColormap",
+    param: URL_PARAMETERS.INVERT_COLORMAP,
+    transform: String,
+  },
+  {
+    key: "posterizeLevels",
+    param: URL_PARAMETERS.POSTERIZE_LEVELS,
+    transform: String,
+  },
+  {
+    key: "hideLowerBound",
+    param: URL_PARAMETERS.HIDE_LOWER_BOUND,
+    transform: String,
+  },
+  { key: "landSeaMaskChoice", param: URL_PARAMETERS.MASK_MODE },
+  {
+    key: "landSeaMaskUseTexture",
+    param: URL_PARAMETERS.MASK_USE_TEXTURE,
+    transform: String,
+  },
+  { key: "projectionMode", param: URL_PARAMETERS.PROJECTION },
+];
+
+const URL_PARAM_SYNC_MAP: TUrlParameterSyncEntry[] = [
+  {
+    key: "paramCameraState",
+    param: URL_PARAMETERS.CAMERA_STATE,
+    skip: (value) => !value,
+  },
+  {
+    key: "paramGridType",
+    param: URL_PARAMETERS.GRID_TYPE,
+    transform: (value) => (value === undefined ? "" : String(value)),
+  },
+];
+
 /* eslint-disable-next-line max-lines-per-function */
 export function useUrlSync() {
   const store = useGlobeControlStore();
-  const {
-    userBoundsHigh,
-    userBoundsLow,
-    varnameSelector,
-    colormap,
-    invertColormap,
-    posterizeLevels,
-    dimSlidersDisplay,
-    projectionCenter,
-  } = storeToRefs(store);
-
+  const { userBoundsHigh, userBoundsLow, dimSlidersDisplay, projectionCenter } =
+    storeToRefs(store);
   const urlParameterStore = useUrlParameterStore();
-  const { paramCameraState, paramGridType } = storeToRefs(urlParameterStore);
 
   function changeURLHash(
     entries: Partial<Record<TURLParameterValues, string | number>>
@@ -59,95 +114,49 @@ export function useUrlSync() {
     );
   }
 
-  function handleUserBounds() {
-    if (
-      (userBoundsLow.value !== undefined &&
-        userBoundsHigh.value !== undefined) ||
-      (userBoundsLow.value === undefined && userBoundsHigh.value === undefined)
-    ) {
-      changeURLHash({
-        [URL_PARAMETERS.USER_BOUNDS_LOW]: userBoundsLow.value as number,
-        [URL_PARAMETERS.USER_BOUNDS_HIGH]: userBoundsHigh.value as number,
-      });
-    }
+  for (const { key, param, transform, skip } of GLOBE_URL_SYNC_MAP) {
+    watch(
+      () => store[key],
+      (value) => {
+        if (skip?.(value)) {
+          return;
+        }
+        changeURLHash({
+          [param]: transform ? transform(value) : (value as string | number),
+        });
+      }
+    );
   }
 
-  const debouncedUserBoundsSync = debounce(() => {
-    handleUserBounds();
-  }, 200);
-
-  watch(
-    () => varnameSelector.value,
-    () => {
-      if (!varnameSelector.value || varnameSelector.value === "-") {
-        return;
+  for (const { key, param, transform, skip } of URL_PARAM_SYNC_MAP) {
+    watch(
+      () => urlParameterStore[key],
+      (value) => {
+        if (skip?.(value)) {
+          return;
+        }
+        changeURLHash({
+          [param]: transform ? transform(value) : (value as string | number),
+        });
       }
-      changeURLHash({ [URL_PARAMETERS.VARNAME]: varnameSelector.value });
-    }
-  );
+    );
+  }
 
-  watch(
-    () => userBoundsLow.value,
+  watchDebounced(
+    () => [userBoundsLow.value, userBoundsHigh.value],
     () => {
-      debouncedUserBoundsSync();
-    }
-  );
-
-  watch(
-    () => userBoundsHigh.value,
-    () => {
-      debouncedUserBoundsSync();
-    }
-  );
-
-  watch(
-    () => invertColormap.value,
-    () => {
-      changeURLHash({
-        [URL_PARAMETERS.INVERT_COLORMAP]: String(invertColormap.value),
-      });
-    }
-  );
-
-  watch(
-    () => colormap.value,
-    () => {
-      changeURLHash({ [URL_PARAMETERS.COLORMAP]: colormap.value });
-    }
-  );
-
-  watch(
-    () => posterizeLevels.value,
-    () => {
-      changeURLHash({
-        [URL_PARAMETERS.POSTERIZE_LEVELS]: String(posterizeLevels.value),
-      });
-    }
-  );
-
-  watch(
-    () => store.hideLowerBound,
-    () => {
-      changeURLHash({
-        [URL_PARAMETERS.HIDE_LOWER_BOUND]: String(store.hideLowerBound),
-      });
-    }
-  );
-
-  watch(
-    () => store.landSeaMaskChoice,
-    () => {
-      changeURLHash({ [URL_PARAMETERS.MASK_MODE]: store.landSeaMaskChoice });
-    }
-  );
-
-  watch(
-    () => store.landSeaMaskUseTexture,
-    () => {
-      changeURLHash({
-        [URL_PARAMETERS.MASK_USE_TEXTURE]: String(store.landSeaMaskUseTexture),
-      });
-    }
+      const bothSet =
+        userBoundsLow.value !== undefined && userBoundsHigh.value !== undefined;
+      const bothUnset =
+        userBoundsLow.value === undefined && userBoundsHigh.value === undefined;
+      if (bothSet || bothUnset) {
+        changeURLHash({
+          [URL_PARAMETERS.USER_BOUNDS_LOW]: userBoundsLow.value as number,
+          [URL_PARAMETERS.USER_BOUNDS_HIGH]: userBoundsHigh.value as number,
+        });
+      }
+    },
+    { debounce: 200 }
   );
 
   watch(
@@ -170,51 +179,18 @@ export function useUrlSync() {
     { deep: true }
   );
 
-  watch(
-    () => paramCameraState.value,
-    () => {
-      if (paramCameraState.value) {
-        changeURLHash({
-          [URL_PARAMETERS.CAMERA_STATE]: paramCameraState.value,
-        });
-      }
-    }
-  );
-
-  watch(
-    () => store.projectionMode,
-    () => {
-      changeURLHash({
-        [URL_PARAMETERS.PROJECTION]: store.projectionMode,
-      });
-    }
-  );
-
-  const debouncedProjectionCenterSync = debounce((lat: number, lon: number) => {
-    changeURLHash({
-      [URL_PARAMETERS.PROJECTION_CENTER_LAT]: lat,
-      [URL_PARAMETERS.PROJECTION_CENTER_LON]: lon,
-    });
-  }, 200);
-
-  watch(
+  watchDebounced(
     () => [projectionCenter.value?.lat, projectionCenter.value?.lon],
     () => {
       const center = projectionCenter.value;
       if (!center) {
         return;
       }
-      debouncedProjectionCenterSync(center.lat, center.lon);
-    }
-  );
-
-  watch(
-    () => paramGridType.value,
-    () => {
-      const gridType = paramGridType.value;
       changeURLHash({
-        [URL_PARAMETERS.GRID_TYPE]: gridType === undefined ? "" : gridType,
+        [URL_PARAMETERS.PROJECTION_CENTER_LAT]: center.lat,
+        [URL_PARAMETERS.PROJECTION_CENTER_LON]: center.lon,
       });
-    }
+    },
+    { debounce: 200 }
   );
 }

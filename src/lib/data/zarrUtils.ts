@@ -49,6 +49,15 @@ export function getFillValue(
   return NaN;
 }
 
+export function getMissingAndFillValues(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+) {
+  return {
+    missingValue: getMissingValue(datavar),
+    fillValue: getFillValue(datavar),
+  };
+}
+
 /**
  * Create a predicate that returns true when a value equals the dataset's
  * missing or fill value (or is NaN).

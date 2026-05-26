@@ -1,4 +1,8 @@
-import { useEventListener } from "@vueuse/core";
+import {
+  useDebounceFn,
+  useEventListener,
+  useResizeObserver,
+} from "@vueuse/core";
 import * as d3 from "d3-geo";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -35,6 +39,7 @@ type UseGridSceneOptions = {
   projectionCenter: Ref<TProjectionCenter | undefined>;
   controlPanelVisible: Ref<boolean>;
   cameraState: GridCameraState;
+  onMotionStateChange?: (isInMotion: boolean) => void;
   onReady?: () => void | Promise<void>;
 };
 
@@ -45,6 +50,7 @@ export function useGridScene(options: UseGridSceneOptions) {
     projectionCenter,
     controlPanelVisible,
     cameraState,
+    onMotionStateChange,
     onReady,
   } = options;
 
@@ -61,11 +67,11 @@ export function useGridScene(options: UseGridSceneOptions) {
   let camera: THREE.PerspectiveCamera | undefined = undefined;
   let renderer: THREE.WebGLRenderer | undefined = undefined;
   let orbitControls: OrbitControls | undefined = undefined;
-  let resizeObserver: ResizeObserver | undefined = undefined;
   let updateLOD: (() => void) | undefined = undefined;
   let baseSurface: THREE.Mesh | undefined = undefined;
   let pickSurface: THREE.Mesh | undefined = undefined;
   let mouseDown = false;
+  let wheelActive = false;
   const raycaster = new THREE.Raycaster();
   const hoveredGeoPoint = shallowRef<THoverGeoPoint | null>(null);
   let lastPointerPosition: { clientX: number; clientY: number } | null = null;
@@ -85,8 +91,22 @@ export function useGridScene(options: UseGridSceneOptions) {
   // the next time anything triggers a render (click, bounds change, etc.).
   let idleFrameCount = 0;
   const IDLE_FRAMES_BEFORE_STOP = 30; // ~500 ms at 60 fps – outlasts any realistic damping
+  const WHEEL_INTERACTION_TIMEOUT_MS = 120;
+  const debouncedEndWheelInteraction = useDebounceFn(() => {
+    wheelActive = false;
+    animationLoop();
+  }, WHEEL_INTERACTION_TIMEOUT_MS);
   let targetOffset = 0;
   let isInitialLoad = true;
+  let isInMotion = false;
+
+  function setMotionState(next: boolean) {
+    if (isInMotion === next) {
+      return;
+    }
+    isInMotion = next;
+    onMotionStateChange?.(next);
+  }
 
   function getScene() {
     return scene;
@@ -104,20 +124,12 @@ export function useGridScene(options: UseGridSceneOptions) {
     return orbitControls;
   }
 
-  function getResizeObserver() {
-    return resizeObserver;
-  }
-
   function getBaseSurface() {
     return baseSurface;
   }
 
   function registerUpdateLOD(func: () => void) {
     updateLOD = func;
-  }
-
-  function setResizeObserver(observer: ResizeObserver) {
-    resizeObserver = observer;
   }
 
   function redraw() {
@@ -567,33 +579,26 @@ export function useGridScene(options: UseGridSceneOptions) {
   }
 
   function onCanvasResize() {
-    if (!box.value) {
+    const boxElement = box.value;
+    const currentCamera = getCamera();
+    const currentRenderer = getRenderer();
+    if (!boxElement || !currentCamera || !currentRenderer) {
       return;
     }
     const { width: boxWidth, height: boxHeight } =
-      box.value.getBoundingClientRect();
+      boxElement.getBoundingClientRect();
 
     if (boxWidth !== width.value || boxHeight !== height.value) {
-      getResizeObserver()?.unobserve(box.value);
-
       const aspect = boxWidth / boxHeight;
-      getCamera()!.aspect = aspect;
-      getCamera()!.updateProjectionMatrix();
-
-      const myRenderer = getRenderer() as THREE.WebGLRenderer;
-      if (myRenderer) {
-        myRenderer.setSize(boxWidth, boxHeight);
-      }
+      currentCamera.aspect = aspect;
+      currentCamera.updateProjectionMatrix();
+      currentRenderer.setSize(boxWidth, boxHeight);
 
       width.value = boxWidth;
       height.value = boxHeight;
 
       updateCameraForPanel();
       redraw();
-
-      if (box.value) {
-        getResizeObserver()!.observe(box.value);
-      }
     }
   }
 
@@ -676,11 +681,15 @@ export function useGridScene(options: UseGridSceneOptions) {
     }
 
     const controlsUpdated = render();
+    const userInteractionActive = mouseDown || wheelActive;
+    setMotionState(
+      userInteractionActive || store.isRotating || controlsUpdated
+    );
     if (lastPointerPosition) {
       refreshHover();
     }
     const cam = getCamera();
-    if (!mouseDown && !store.isRotating) {
+    if (!userInteractionActive && !store.isRotating) {
       if (controlsUpdated) {
         // Controls are still moving (damping draining) – reset idle counter.
         idleFrameCount = 0;
@@ -693,6 +702,7 @@ export function useGridScene(options: UseGridSceneOptions) {
       if (idleFrameCount >= IDLE_FRAMES_BEFORE_STOP) {
         // Damping is fully drained – safe to stop the loop.
         idleFrameCount = 0;
+        setMotionState(false);
         if (cam) {
           cameraState.debouncedEncodeCameraToURL(cam);
         }
@@ -700,7 +710,7 @@ export function useGridScene(options: UseGridSceneOptions) {
       }
     } else {
       idleFrameCount = 0;
-      if (isPresenterActive.value && cam && mouseDown) {
+      if (isPresenterActive.value && cam && userInteractionActive) {
         cameraState.encodeCameraToURL(cam);
       }
     }
@@ -710,11 +720,20 @@ export function useGridScene(options: UseGridSceneOptions) {
   function onInteractionStart() {
     mouseDown = true;
     idleFrameCount = 0;
+    setMotionState(true);
     animationLoop();
   }
 
   function onInteractionEnd() {
     mouseDown = false;
+    animationLoop();
+  }
+
+  function onWheelInteraction() {
+    wheelActive = true;
+    idleFrameCount = 0;
+    setMotionState(true);
+    debouncedEndWheelInteraction();
     animationLoop();
   }
 
@@ -749,15 +768,9 @@ export function useGridScene(options: UseGridSceneOptions) {
   function setupInteractionListeners() {
     setupHoverListeners();
 
-    useEventListener(
-      canvas.value,
-      "wheel",
-      () => {
-        onInteractionStart();
-        onInteractionEnd();
-      },
-      { passive: true }
-    );
+    useEventListener(canvas.value, "wheel", onWheelInteraction, {
+      passive: true,
+    });
 
     useEventListener(canvas.value, "mouseup", onInteractionEnd, {
       passive: true,
@@ -881,18 +894,25 @@ export function useGridScene(options: UseGridSceneOptions) {
     setupKeyboardListeners();
 
     initEssentials();
-    setResizeObserver(new ResizeObserver(onCanvasResize));
-    getResizeObserver()?.observe(box.value!);
     void onReady?.();
   });
 
+  useResizeObserver(box, onCanvasResize);
+
   onBeforeUnmount(() => {
+    if (frameId.value) {
+      cancelAnimationFrame(frameId.value);
+      frameId.value = 0;
+    }
+    orbitControls?.dispose();
+    orbitControls = undefined;
+    cleanupSurface(baseSurface);
+    cleanupSurface(pickSurface);
+    baseSurface = undefined;
+    pickSurface = undefined;
     scene?.clear();
     camera?.clear();
     renderer?.dispose();
-    if (box.value) {
-      getResizeObserver()?.unobserve(box.value!);
-    }
     scene = undefined;
     renderer = undefined;
     camera = undefined;
@@ -982,7 +1002,6 @@ export function useGridScene(options: UseGridSceneOptions) {
     box,
     getScene,
     getCamera,
-    getResizeObserver,
     redraw,
     toggleRotate,
     makeSnapshot,

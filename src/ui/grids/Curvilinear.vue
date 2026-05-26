@@ -20,6 +20,7 @@ import {
   getDataBounds,
   getCRSStringForXYVariable,
   getLatLonData,
+  getMissingAndFillValues,
   getPolarStereoCRSParams,
   isPolarStereographicCRS,
   mapMissingAndFillToNaN,
@@ -790,7 +791,7 @@ async function fetchAndRenderData(
   let rawData = castDataVarToFloat32(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
-  const { missingValue, fillValue } = getDataBounds(datavar, rawData);
+  const { missingValue, fillValue } = getMissingAndFillValues(datavar);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
   rawData = applyDisplayTransformToData(rawData, transformMode.value);
   const { min, max } = getDataBounds(datavar, rawData);

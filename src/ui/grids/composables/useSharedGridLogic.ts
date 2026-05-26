@@ -26,6 +26,8 @@ import {
   type THistogramSummary,
 } from "@/utils/histogram.ts";
 
+type VoidCallback = () => void;
+
 /* eslint-disable-next-line max-lines-per-function */
 export function useSharedGridLogic() {
   const store = useGlobeControlStore();
@@ -52,15 +54,30 @@ export function useSharedGridLogic() {
   });
 
   const cameraState = useGridCameraState();
+  const isSceneInMotion = ref(false);
+  const projectionChangeCallbacks: VoidCallback[] = [];
+  const motionStateCallbacks: VoidCallback[] = [];
+  const colormapChangeCallbacks: VoidCallback[] = [];
   let updateCoastlines: () => Promise<void> = async () => {};
   let updateGraticules: () => Promise<void> = async () => {};
+
+  function onProjectionChange(callback: VoidCallback) {
+    projectionChangeCallbacks.push(callback);
+  }
+
+  function onMotionStateChange(callback: VoidCallback) {
+    motionStateCallbacks.push(callback);
+  }
+
+  function onColormapChange(callback: VoidCallback) {
+    colormapChangeCallbacks.push(callback);
+  }
 
   const {
     canvas,
     box,
     getScene,
     getCamera,
-    getResizeObserver,
     redraw,
     toggleRotate,
     makeSnapshot,
@@ -74,6 +91,12 @@ export function useSharedGridLogic() {
     projectionCenter,
     controlPanelVisible,
     cameraState,
+    onMotionStateChange: (isInMotion) => {
+      isSceneInMotion.value = isInMotion;
+      for (const callback of motionStateCallbacks) {
+        callback();
+      }
+    },
     onReady: () => {
       updateCoastlines();
       updateGraticules();
@@ -147,6 +170,10 @@ export function useSharedGridLogic() {
         void updateOverlayProjectionUniforms();
         updateLandSeaMaskProjectionUniforms();
       }
+
+      for (const callback of projectionChangeCallbacks) {
+        callback();
+      }
     },
     { deep: true }
   );
@@ -183,6 +210,21 @@ export function useSharedGridLogic() {
     }
     redraw();
   }
+
+  watch(
+    [
+      () => selection.value,
+      () => invertColormap.value,
+      () => colormap.value,
+      () => posterizeLevels.value,
+      () => hideLowerBound.value,
+    ],
+    () => {
+      for (const callback of colormapChangeCallbacks) {
+        callback();
+      }
+    }
+  );
 
   async function fetchDimensionDetails(
     currentVariable: string,
@@ -335,7 +377,6 @@ export function useSharedGridLogic() {
   return {
     getScene,
     getCamera,
-    getResizeObserver,
     redraw,
     toggleRotate,
     makeSnapshot,
@@ -348,6 +389,10 @@ export function useSharedGridLogic() {
     updateColormap,
     updateHistogram,
     projectionHelper,
+    isSceneInMotion,
+    onProjectionChange,
+    onMotionStateChange,
+    onColormapChange,
     canvas,
     box,
     hoveredGeoPoint,

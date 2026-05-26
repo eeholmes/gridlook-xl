@@ -1,13 +1,11 @@
 <script lang="ts" setup>
 import { storeToRefs } from "pinia";
 import * as THREE from "three";
-import { computed, onBeforeMount, ref, watch } from "vue";
+import { onBeforeMount, ref, watch } from "vue";
 import type * as zarr from "zarrita";
 
-import {
-  createGeoSampleIndex,
-  useGridHoverLookup,
-} from "./composables/gridHoverUtils.ts";
+import { useGridHoverLookup } from "./composables/gridHoverUtils.ts";
+import type { TGeoSampleIndex } from "./composables/gridHoverUtils.ts";
 import { useSharedGridLogic } from "./composables/useSharedGridLogic.ts";
 
 import { buildDimensionRangesAndIndices } from "@/lib/data/dimensionHandling.ts";
@@ -17,6 +15,7 @@ import {
   castDataVarToFloat32,
   getDataBounds,
   getLatLonData,
+  getMissingAndFillValues,
   getXYCoordinatesAsLatLon,
   isLatitudeName,
   isLongitudeName,
@@ -52,12 +51,9 @@ const {
   transformMode,
   varnameSelector,
   invertColormap,
-  posterizeLevels,
   selection,
   isInitializingVariable,
   varinfo,
-  projectionMode,
-  projectionCenter,
 } = storeToRefs(store);
 
 const urlParameterStore = useUrlParameterStore();
@@ -77,6 +73,9 @@ const {
   updateColormap,
   updateHistogram,
   projectionHelper,
+  onProjectionChange,
+  onMotionStateChange,
+  onColormapChange,
   canvas,
   box,
   hoveredGeoPoint,
@@ -92,7 +91,16 @@ const longitudes = ref(new Float64Array());
 const latitudes = ref(new Float64Array());
 
 const BATCH_SIZE = 60;
+const HALF_CIRCLE_DEGREES = 180;
+const FULL_CIRCLE_DEGREES = 360;
 let meshes: THREE.Mesh[] = [];
+
+onColormapChange(() => {
+  updateColormap(meshes);
+});
+
+onProjectionChange(updateMeshProjectionUniforms);
+onMotionStateChange(updateMeshProjectionUniforms);
 watch(
   () => varnameSelector.value,
   async (nextVarname, previousVarname) => {
@@ -128,31 +136,6 @@ watch(
   () => {
     datasourceUpdate();
   }
-);
-
-const bounds = computed(() => {
-  return selection.value;
-});
-
-watch(
-  [
-    () => bounds.value,
-    () => invertColormap.value,
-    () => colormap.value,
-    () => posterizeLevels.value,
-    () => store.hideLowerBound,
-  ],
-  () => {
-    updateColormap(meshes);
-  }
-);
-
-watch(
-  [() => projectionMode.value, () => projectionCenter.value],
-  () => {
-    updateMeshProjectionUniforms();
-  },
-  { deep: true }
 );
 
 function updateMeshProjectionUniforms() {
@@ -287,34 +270,37 @@ function isLongitudeGlobal(longitudes: Float64Array): boolean {
 }
 
 /**
- * Generates vertices, UVs, and lat/lon coordinates for a grid.
- *
- * For GPU projection, we store lat/lon as vertex attributes and use
- * placeholder positions (0,0,0) that will be computed in the vertex shader.
- * We also compute initial positions for the current projection to avoid
- * a flash of incorrect geometry on first render.
+ * Generates vertices, UVs, and lat/lon coordinates for one latitude batch.
+ * `latStart` and `latEnd` are global latitude row indices into `latitudes`.
  */
-function generateGridVerticesAndUVs(
+function generateBatchGeometryData(
   latitudes: Float64Array,
   longitudes: Float64Array,
+  latStart: number,
+  latEnd: number,
   isReversed: boolean,
   isRotated: boolean,
   textureLonCount: number,
   poleLat?: number,
   poleLon?: number
 ) {
-  const positionValues: number[] = [];
-  const uvs: number[] = [];
-  const latCount = latitudes.length;
+  const batchLatCount = latEnd - latStart + 1;
   const lonCount = longitudes.length;
-  const latLonValues = new Float32Array(latCount * lonCount * 2);
+  const vertexCount = batchLatCount * lonCount;
+  const positionValues = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const latLonValues = new Float32Array(vertexCount * 2);
+  // UV v spans the full source texture latitude range, so we normalize
+  // against total latitude count instead of only this batch size.
+  const latDenominator = Math.max(latitudes.length - 1, 1);
 
   const helper = projectionHelper.value;
 
-  for (let i = 0; i < latCount; i++) {
-    const rawLat = latitudes[i];
-    for (let j = 0; j < lonCount; j++) {
-      const rawLon = longitudes[j];
+  for (let li = 0; li < batchLatCount; li++) {
+    const globalLatIdx = latStart + li;
+    const rawLat = latitudes[globalLatIdx];
+    for (let lj = 0; lj < lonCount; lj++) {
+      const rawLon = longitudes[lj];
 
       // If the grid is rotated, convert the raw latitude and longitude values
       // to geographic coordinates.
@@ -323,15 +309,14 @@ function generateGridVerticesAndUVs(
         : { lat: rawLat, lon: rawLon };
 
       // Store lat/lon for GPU projection and set initial positions
-      const latLonOffset = (i * lonCount + j) * 2;
-      const positionOffset = positionValues.length;
+      const vertexIdx = li * lonCount + lj;
       helper.projectLatLonToArrays(
         lat,
         lon,
         positionValues,
-        positionOffset,
+        vertexIdx * 3,
         latLonValues,
-        latLonOffset
+        vertexIdx * 2
       );
 
       // Calculate the texture coordinates for the point. The `u` coordinate
@@ -340,11 +325,12 @@ function generateGridVerticesAndUVs(
       // Pixel-centre UVs: place each vertex at the centre of its texel so that
       // nearest-neighbour cell boundaries align with the midpoints between data
       // points (fixes the half-cell-east visual shift).
-      const u = (j + 0.5) / textureLonCount;
+      const u = (lj + 0.5) / textureLonCount;
       const v = isReversed
-        ? (latCount - 1 - i) / (latCount - 1)
-        : i / (latCount - 1);
-      uvs.push(u, v);
+        ? (latitudes.length - 1 - globalLatIdx) / latDenominator
+        : globalLatIdx / latDenominator;
+      uvs[vertexIdx * 2] = u;
+      uvs[vertexIdx * 2 + 1] = v;
     }
   }
 
@@ -381,7 +367,11 @@ function normalizeLongitudes(longitudes: Float64Array): Float64Array {
   return Float64Array.from(longitudes, (lon) => ((lon % 360) + 360) % 360);
 }
 
-async function getGaussianGrid() {
+/**
+ * Computes normalized/rotation-aware grid coordinate parameters used
+ * to build regular-grid render geometry batches.
+ */
+async function getRegularGridParameters() {
   const isRotated = props.isRotated;
   let longitudeValues = normalizeLongitudes(longitudes.value);
   let latitudeValues = latitudes.value;
@@ -411,23 +401,17 @@ async function getGaussianGrid() {
     poleLat = rotatedNorthPole.lat;
     poleLon = rotatedNorthPole.lon;
   }
-  const { positionValues, uvs, latLonValues } = generateGridVerticesAndUVs(
-    latitudeValues,
-    longitudeValues,
-    isLatReversed,
-    isRotated,
-    textureLonCount,
-    poleLat,
-    poleLon
-  );
-
   const latCount = latitudeValues.length;
   const lonCount = longitudeValues.length;
 
   return {
-    positionValues,
-    uvs,
-    latLonValues,
+    latitudeValues,
+    longitudeValues,
+    textureLonCount,
+    isLatReversed,
+    isRotated,
+    poleLat,
+    poleLon,
     latCount,
     lonCount,
     isGlobal,
@@ -446,9 +430,13 @@ function cleanupMeshes(totalBatches: number) {
 }
 
 function createBatchGeometry(
-  positionValues: number[],
-  uvs: number[],
-  latLonValues: Float32Array,
+  latitudeValues: Float64Array,
+  longitudeValues: Float64Array,
+  textureLonCount: number,
+  isLatReversed: boolean,
+  isRotated: boolean,
+  poleLat: number | undefined,
+  poleLon: number | undefined,
   lonCount: number,
   isGlobal: boolean,
   latStart: number,
@@ -456,23 +444,27 @@ function createBatchGeometry(
 ) {
   const geometry = new THREE.BufferGeometry();
 
-  // Extract vertices for this batch (from latStart to latEnd inclusive)
   const batchLatCount = latEnd - latStart + 1;
-  const startVertex = latStart * lonCount;
-  const endVertex = (latEnd + 1) * lonCount;
-
-  const batchPositions = positionValues.slice(startVertex * 3, endVertex * 3);
-  const batchUvs = uvs.slice(startVertex * 2, endVertex * 2);
-  const batchLatLon = latLonValues.slice(startVertex * 2, endVertex * 2);
+  const { positionValues, uvs, latLonValues } = generateBatchGeometryData(
+    latitudeValues,
+    longitudeValues,
+    latStart,
+    latEnd,
+    isLatReversed,
+    isRotated,
+    textureLonCount,
+    poleLat,
+    poleLon
+  );
 
   geometry.setAttribute(
     "position",
-    new THREE.Float32BufferAttribute(batchPositions, 3)
+    new THREE.Float32BufferAttribute(positionValues, 3)
   );
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(batchUvs, 2));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setAttribute(
     "latLon",
-    new THREE.Float32BufferAttribute(batchLatLon, 2)
+    new THREE.Float32BufferAttribute(latLonValues, 2)
   );
 
   // Generate indices for this batch
@@ -483,8 +475,18 @@ function createBatchGeometry(
 
 async function makeGeometry() {
   try {
-    const { positionValues, uvs, latLonValues, latCount, lonCount, isGlobal } =
-      await getGaussianGrid();
+    const {
+      latitudeValues,
+      longitudeValues,
+      textureLonCount,
+      isLatReversed,
+      isRotated,
+      poleLat,
+      poleLon,
+      latCount,
+      lonCount,
+      isGlobal,
+    } = await getRegularGridParameters();
 
     const totalBatches = Math.ceil((latCount - 1) / BATCH_SIZE);
     cleanupMeshes(totalBatches);
@@ -494,9 +496,13 @@ async function makeGeometry() {
       const latEnd = Math.min(latStart + BATCH_SIZE, latCount - 1);
 
       const geometry = createBatchGeometry(
-        positionValues,
-        uvs,
-        latLonValues,
+        latitudeValues,
+        longitudeValues,
+        textureLonCount,
+        isLatReversed,
+        isRotated,
+        poleLat,
+        poleLon,
         lonCount,
         isGlobal,
         latStart,
@@ -569,8 +575,8 @@ function makeMaterial(rawData: Float32Array) {
     longitudes.value.length,
     isGridGlobal.value
   );
-  const low = bounds.value?.low as number;
-  const high = bounds.value?.high as number;
+  const low = selection.value?.low as number;
+  const high = selection.value?.high as number;
   const { addOffset, scaleFactor } = getColormapScaleOffset(
     low,
     high,
@@ -599,35 +605,126 @@ async function getDimensionValues(
   return dimValues;
 }
 
-async function buildHoverSamples(rawData: Float32Array) {
-  const samples: { lat: number; lon: number; value: number }[] = [];
+/**
+ * Builds a regular-grid hover index using binary search over lat/lon axes,
+ * avoiding full sample materialization for each data refresh.
+ */
+async function buildHoverIndex(
+  rawData: Float32Array
+): Promise<TGeoSampleIndex> {
   let rotPole: { lat: number; lon: number } | null = null;
   if (props.isRotated) {
     rotPole = await getRotatedNorthPole();
   }
-  for (let latIdx = 0; latIdx < latitudes.value.length; latIdx++) {
-    if (isLatOnly.value) {
-      samples.push({
-        lat: latitudes.value[latIdx],
-        lon: 0,
-        value: rawData[latIdx],
-      });
-    } else {
-      for (let lonIdx = 0; lonIdx < longitudes.value.length; lonIdx++) {
-        const rawLat = latitudes.value[latIdx];
-        const rawLon = longitudes.value[lonIdx];
-        const { lat, lon } = rotPole
-          ? rotatedToGeographic(rawLat, rawLon, rotPole.lat, rotPole.lon)
-          : { lat: rawLat, lon: rawLon };
-        samples.push({
-          lat,
-          lon: ProjectionHelper.normalizeLongitude(lon),
-          value: rawData[latIdx * longitudes.value.length + lonIdx],
-        });
+
+  const lats = latitudes.value;
+  const lons = longitudes.value;
+  const latCount = lats.length;
+  const lonCount = lons.length;
+
+  return {
+    findNearest(queryLat: number, queryLon: number) {
+      if (latCount === 0 || lonCount === 0) {
+        return null;
       }
+
+      const latIdx = nearestIndex(lats, queryLat);
+      if (latIdx < 0) {
+        return null;
+      }
+      if (isLatOnly.value) {
+        return { lat: lats[latIdx], lon: 0, value: rawData[latIdx] };
+      }
+
+      const lonIdx = nearestLonIndex(lons, queryLon);
+      if (lonIdx < 0) {
+        return null;
+      }
+      const rawLat = lats[latIdx];
+      const rawLon = lons[lonIdx];
+      const { lat, lon } = rotPole
+        ? rotatedToGeographic(rawLat, rawLon, rotPole.lat, rotPole.lon)
+        : { lat: rawLat, lon: rawLon };
+
+      return {
+        lat,
+        lon: ProjectionHelper.normalizeLongitude(lon),
+        value: rawData[latIdx * lonCount + lonIdx],
+      };
+    },
+  };
+}
+
+/**
+ * Finds nearest index in a sorted (ascending or descending) 1D array.
+ */
+function nearestIndex(sorted: Float64Array, target: number): number {
+  if (sorted.length === 0) {
+    return -1;
+  }
+  if (sorted.length === 1) {
+    return 0;
+  }
+
+  let lo = 0;
+  let hi = sorted.length - 1;
+  const ascending = sorted[0] < sorted[hi];
+
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (ascending ? sorted[mid] < target : sorted[mid] > target) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
     }
   }
-  return samples;
+
+  if (
+    lo > 0 &&
+    Math.abs(sorted[lo - 1] - target) < Math.abs(sorted[lo] - target)
+  ) {
+    return lo - 1;
+  }
+  return lo;
+}
+
+/**
+ * Finds nearest longitude index with wrap-aware fallback across antimeridian.
+ */
+function nearestLonIndex(lons: Float64Array, target: number): number {
+  if (lons.length === 0) {
+    return -1;
+  }
+  if (lons.length === 1) {
+    return 0;
+  }
+
+  const lo = lons[0];
+  const hi = lons[lons.length - 1];
+
+  let adjustedTarget = target;
+  if (adjustedTarget < lo - HALF_CIRCLE_DEGREES) {
+    adjustedTarget += FULL_CIRCLE_DEGREES;
+  } else if (adjustedTarget > hi + HALF_CIRCLE_DEGREES) {
+    adjustedTarget -= FULL_CIRCLE_DEGREES;
+  }
+
+  const idx = nearestIndex(lons, adjustedTarget);
+  // Choose wrapped alternative direction based on which side of the longitude
+  // range midpoint the adjusted target falls on.
+  const altTarget =
+    adjustedTarget < (lo + hi) / 2
+      ? adjustedTarget + FULL_CIRCLE_DEGREES
+      : adjustedTarget - FULL_CIRCLE_DEGREES;
+  const altIdx = nearestIndex(lons, altTarget);
+
+  const dist = Math.abs(lons[idx] - adjustedTarget);
+  let altDist = Math.abs(lons[altIdx] - altTarget);
+  // Normalize wrapped distance when the alternative crosses the antimeridian.
+  if (altDist > HALF_CIRCLE_DEGREES) {
+    altDist = FULL_CIRCLE_DEGREES - altDist;
+  }
+  return dist <= altDist ? idx : altIdx;
 }
 
 async function buildDimensionConfig(
@@ -667,7 +764,7 @@ async function fetchAndRenderData(
     (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
   );
 
-  const { missingValue, fillValue } = getDataBounds(datavar, rawData);
+  const { missingValue, fillValue } = getMissingAndFillValues(datavar);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
   rawData = applyDisplayTransformToData(rawData, transformMode.value);
   const { min, max } = getDataBounds(datavar, rawData);
@@ -679,12 +776,8 @@ async function fetchAndRenderData(
   updateProjectionUniforms(material, helper);
 
   // Update hover lookup
-  const samples = await buildHoverSamples(rawData);
-  setHoverLookupFromIndex(
-    createGeoSampleIndex(samples),
-    fillValue,
-    missingValue
-  );
+  const hoverIndex = await buildHoverIndex(rawData);
+  setHoverLookupFromIndex(hoverIndex, fillValue, missingValue);
 
   updateHistogram(rawData, min, max, missingValue, fillValue);
 
