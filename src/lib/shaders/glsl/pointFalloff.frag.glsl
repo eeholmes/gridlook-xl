@@ -19,7 +19,7 @@ void main() {
     normalized_value = posterize(normalized_value, posterizeLevels);
     float r2 = dot(uv, uv);
     // Soft circular splat using Gaussian falloff
-    float falloff = exp(-r2 * 2.0); // Adjust the 4.0 as needed (sharpness)
+    float falloff = exp(-r2 * 2.0); // Adjust the 2.0 as needed (sharpness)
     if (falloff < 0.01) discard; // Optional: discard transparent fragments
 
 
