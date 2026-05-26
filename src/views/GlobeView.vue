@@ -115,6 +115,8 @@ const sourceValid = ref(false);
 const datasources: Ref<TSources | undefined> = ref(undefined);
 const detectedGridType: Ref<T_GRID_TYPES | undefined> = ref(undefined);
 const infoPanelOpen = ref(false);
+let sourceRequestId = 0;
+let gridTypeRequestId = 0;
 
 const distractionFreeFromUrl = paramDistractionFree.value === "true";
 
@@ -167,12 +169,23 @@ async function setGridType() {
   if (!isInitialized.value) {
     return;
   }
+  const requestId = ++gridTypeRequestId;
+  const localSourceValid = sourceValid.value;
+  const localVarname = varnameSelector.value;
+  const localDatasources = datasources.value;
   const localGridType = await getGridType(
-    sourceValid.value,
-    varnameSelector.value,
-    datasources.value,
+    localSourceValid,
+    localVarname,
+    localDatasources,
     logError
   );
+  if (
+    requestId !== gridTypeRequestId ||
+    localVarname !== varnameSelector.value ||
+    localDatasources !== datasources.value
+  ) {
+    return;
+  }
   detectedGridType.value = localGridType;
   if (localGridType === GRID_TYPES.ERROR) {
     store.stopLoading();
@@ -185,6 +198,9 @@ watch(
     // Rerender controls and globe and reset store
     // if new data is provided
     detectedGridType.value = undefined;
+    datasources.value = undefined;
+    sourceValid.value = false;
+    gridTypeRequestId += 1;
     globeKey.value += 1;
     globeControlKey.value += 1;
     if (isDisplayMode.value || isPresenterActive.value) {
@@ -215,11 +231,12 @@ watch(
 );
 
 function prepareDefaults(src: string, index: TSources) {
-  if (src === props.src) {
-    datasources.value = index;
-    // Store dataset title for snapshot overlay
-    store.datasetTitle = index.name ?? "";
+  if (src !== props.src) {
+    return;
   }
+  datasources.value = index;
+  // Store dataset title for snapshot overlay
+  store.datasetTitle = index.name ?? "";
   const validVars = Object.keys(modelInfo.value!.vars).filter((varname) => {
     const varinfo = modelInfo.value!.vars[varname];
     return !varinfo.hidden;
@@ -247,6 +264,7 @@ function prepareDefaults(src: string, index: TSources) {
 
 const updateSrc = async () => {
   const src = props.src;
+  const requestId = ++sourceRequestId;
   ZarrDataManager.invalidateCache();
   // FIXME: Trying zarr and json-index in parallel and picking the first that
   // works. If both fail, we log the last error which is from the json-index.
@@ -256,6 +274,9 @@ const updateSrc = async () => {
     indexFromZarr(src),
     indexFromIndex(src),
   ]);
+  if (requestId !== sourceRequestId || src !== props.src) {
+    return;
+  }
   let lastError = null;
   store.isInitializingVariable = true;
   sourceValid.value = false;
