@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useResizeObserver } from "@vueuse/core";
 import {
   Chart,
   LineController,
@@ -66,6 +67,7 @@ Chart.register(
 // ---------------------------------------------------------------------------
 
 const canvasRef = ref<HTMLCanvasElement>();
+const histSectionRef = ref<HTMLDivElement>();
 const tooltipRef = ref<HTMLElement | null>(null);
 const hoveredBin = ref<number | null>(null);
 const tooltipX = ref(0);
@@ -73,7 +75,6 @@ const tooltipY = ref(0);
 const tooltipData = ref<BinTooltip | null>(null);
 
 let chart: Chart | undefined;
-let resizeObserver: ResizeObserver | undefined;
 
 const dataRange = computed(() =>
   props.dataBoundsLow !== undefined && props.dataBoundsHigh !== undefined
@@ -459,24 +460,19 @@ watch(
 // Lifecycle
 // ---------------------------------------------------------------------------
 
+useResizeObserver(histSectionRef, () => {
+  if (!chart) {
+    return;
+  }
+  chart.resize();
+  setChartAnnotations();
+  chart.update("none");
+});
+
 onMounted(() => {
   createChart();
-  const container = canvasRef.value?.parentElement;
-  if (container) {
-    resizeObserver = new ResizeObserver(() => {
-      if (!chart) {
-        return;
-      }
-      chart.resize();
-      setChartAnnotations();
-      chart.update("none");
-    });
-    resizeObserver.observe(container);
-  }
 });
 onBeforeUnmount(() => {
-  resizeObserver?.disconnect();
-  resizeObserver = undefined;
   chart?.destroy();
   chart = undefined;
 });
@@ -485,7 +481,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="distribution-plot">
     <!-- Histogram chart -->
-    <div class="hist-section">
+    <div ref="histSectionRef" class="hist-section">
       <canvas
         ref="canvasRef"
         @mousemove="onHover"
