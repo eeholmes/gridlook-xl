@@ -294,6 +294,30 @@ async function fetchLatLonVariables(
   return { latitudesVar, longitudesVar };
 }
 
+/**
+ * Returns lat/lon {@link zarr.Array} metadata objects without fetching any
+ * chunk data. Useful for shape-based grid-type detection (e.g. curvilinear
+ * check) where only array dimensions are needed, not the coordinate values.
+ */
+export async function getLatLonVariableInfo(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
+  datasources: TSources,
+  currentVarname: string,
+  isRotated = false
+) {
+  const { latitudeName, longitudeName } = findLatLonNames(
+    datasources,
+    datavar,
+    isRotated
+  );
+  return fetchLatLonVariables(
+    datasources,
+    currentVarname,
+    latitudeName,
+    longitudeName
+  );
+}
+
 export async function getLatLonData(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   datasources: TSources | undefined,
