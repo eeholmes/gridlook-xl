@@ -172,7 +172,7 @@ async function determineGridTypeFromData(
   } catch {
     return null;
   }
-  if (!latitudesVar || longitudesVar === null) {
+  if (latitudesVar === null || longitudesVar === null) {
     return null; // Cannot determine grid type without both lat and lon
   }
 
