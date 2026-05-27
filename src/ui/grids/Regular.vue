@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { storeToRefs } from "pinia";
 import * as THREE from "three";
-import { onBeforeMount, ref, watch } from "vue";
+import { onBeforeMount, onUnmounted, ref, watch } from "vue";
 import type * as zarr from "zarrita";
 
 import { useGridHoverLookup } from "./composables/gridHoverUtils.ts";
@@ -167,9 +167,25 @@ async function datasourceUpdate() {
 }
 
 function setMeshesLoadingState() {
+  if (meshes.length === 0) {
+    return;
+  }
+  const materialsToDispose = new Set<THREE.Material>();
   for (const mesh of meshes) {
+    const previousMaterial = mesh.material;
+    if (Array.isArray(previousMaterial)) {
+      for (const material of previousMaterial) {
+        if (material !== loadingMaterial) {
+          materialsToDispose.add(material);
+        }
+      }
+    } else if (previousMaterial !== loadingMaterial) {
+      materialsToDispose.add(previousMaterial);
+    }
     mesh.material = loadingMaterial;
-    mesh.material.needsUpdate = true;
+  }
+  for (const material of materialsToDispose) {
+    material.dispose();
   }
   redraw();
 }
@@ -846,6 +862,10 @@ async function getData(updateMode: TUpdateMode = UPDATE_MODE.INITIAL_LOAD) {
 
 onBeforeMount(async () => {
   await datasourceUpdate();
+});
+
+onUnmounted(() => {
+  loadingMaterial.dispose();
 });
 
 defineExpose({
