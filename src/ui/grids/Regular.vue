@@ -424,7 +424,7 @@ function subsampleCoords(
   arr: Float64Array,
   maxVerts: number
 ): { coords: Float64Array; origIndices: Int32Array } {
-  if (arr.length <= maxVerts) {
+  if (arr.length <= maxVerts || maxVerts <= 1) {
     const origIndices = new Int32Array(arr.length);
     for (let i = 0; i < arr.length; i++) {
       origIndices[i] = i;
