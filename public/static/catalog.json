@@ -253,7 +253,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "NOAA GEFS Global Ensemble Forecast Analysis",
+      "title": "Slow - NOAA GEFS Global Ensemble Forecast Analysis",
       "url": "icechunk+https://dynamical-noaa-gefs.s3.us-west-2.amazonaws.com/noaa-gefs-analysis/v0.1.2.icechunk/",
       "format": "Zarr v3",
       "access": "icechunk",
