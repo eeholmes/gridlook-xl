@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { storeToRefs } from "pinia";
 import * as THREE from "three";
-import { onBeforeMount, ref, watch } from "vue";
+import { onBeforeMount, onUnmounted, ref, watch } from "vue";
 import type * as zarr from "zarrita";
 
 import { useGridHoverLookup } from "./composables/gridHoverUtils.ts";
@@ -94,6 +94,10 @@ const BATCH_SIZE = 60;
 const HALF_CIRCLE_DEGREES = 180;
 const FULL_CIRCLE_DEGREES = 360;
 let meshes: THREE.Mesh[] = [];
+const loadingMaterial = new THREE.MeshBasicMaterial({
+  color: 0x000000,
+  side: THREE.DoubleSide,
+});
 
 onColormapChange(() => {
   updateColormap(meshes);
@@ -152,12 +156,38 @@ function updateMeshProjectionUniforms() {
 async function datasourceUpdate() {
   resetDataVars();
   clearHoverLookup();
+  setMeshesLoadingState();
   if (props.datasources !== undefined) {
     await getDims();
-    await Promise.all([makeGeometry(), getData()]);
+    await makeGeometry();
+    await getData();
     updateLandSeaMask();
     updateColormap(meshes);
   }
+}
+
+function setMeshesLoadingState() {
+  if (meshes.length === 0) {
+    return;
+  }
+  const materialsToDispose = new Set<THREE.Material>();
+  for (const mesh of meshes) {
+    const previousMaterial = mesh.material;
+    if (Array.isArray(previousMaterial)) {
+      for (const material of previousMaterial) {
+        if (material !== loadingMaterial) {
+          materialsToDispose.add(material);
+        }
+      }
+    } else if (previousMaterial !== loadingMaterial) {
+      materialsToDispose.add(previousMaterial);
+    }
+    mesh.material = loadingMaterial;
+  }
+  for (const material of materialsToDispose) {
+    material.dispose();
+  }
+  redraw();
 }
 
 const isLatOnly = ref(false);
@@ -513,7 +543,7 @@ async function makeGeometry() {
         meshes[batchIndex].geometry.dispose();
         meshes[batchIndex].geometry = geometry;
       } else {
-        const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial());
+        const mesh = new THREE.Mesh(geometry, loadingMaterial);
         mesh.frustumCulled = false;
         meshes.push(mesh);
         getScene()?.add(mesh);
@@ -832,6 +862,10 @@ async function getData(updateMode: TUpdateMode = UPDATE_MODE.INITIAL_LOAD) {
 
 onBeforeMount(async () => {
   await datasourceUpdate();
+});
+
+onUnmounted(() => {
+  loadingMaterial.dispose();
 });
 
 defineExpose({

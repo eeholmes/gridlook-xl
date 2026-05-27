@@ -457,6 +457,9 @@ useEventListener(window, "keydown", (e: KeyboardEvent) => {
         :datasources="datasources"
         :is-rotated="detectedGridType === GRID_TYPES.REGULAR_ROTATED"
       />
+      <div v-if="loading" class="globe-loading-overlay">
+        <div class="globe-loading-message">Data loading…</div>
+      </div>
       <HoverReadout />
     </div>
     <div
@@ -508,5 +511,23 @@ div.top-right-loader {
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+
+.globe-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 900;
+}
+
+.globe-loading-message {
+  background: rgb(0 0 0 / 65%);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
 }
 </style>
