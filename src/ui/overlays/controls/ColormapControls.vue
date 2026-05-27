@@ -83,7 +83,7 @@ function handleBoundsHighUpdate(value: number) {
 // ---------------------------------------------------------------------------
 
 function swatchSrc(cm: TColorMap): string {
-  return `/static/colormaps/${cm}.webp`;
+  return `static/colormaps/${cm}.webp`;
 }
 
 // ---------------------------------------------------------------------------
