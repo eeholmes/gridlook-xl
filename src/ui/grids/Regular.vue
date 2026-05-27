@@ -94,6 +94,10 @@ const BATCH_SIZE = 60;
 const HALF_CIRCLE_DEGREES = 180;
 const FULL_CIRCLE_DEGREES = 360;
 let meshes: THREE.Mesh[] = [];
+const loadingMaterial = new THREE.MeshBasicMaterial({
+  color: 0x000000,
+  side: THREE.DoubleSide,
+});
 
 onColormapChange(() => {
   updateColormap(meshes);
@@ -152,12 +156,22 @@ function updateMeshProjectionUniforms() {
 async function datasourceUpdate() {
   resetDataVars();
   clearHoverLookup();
+  setMeshesLoadingState();
   if (props.datasources !== undefined) {
     await getDims();
-    await Promise.all([makeGeometry(), getData()]);
+    await makeGeometry();
+    await getData();
     updateLandSeaMask();
     updateColormap(meshes);
   }
+}
+
+function setMeshesLoadingState() {
+  for (const mesh of meshes) {
+    mesh.material = loadingMaterial;
+    mesh.material.needsUpdate = true;
+  }
+  redraw();
 }
 
 const isLatOnly = ref(false);
@@ -513,7 +527,7 @@ async function makeGeometry() {
         meshes[batchIndex].geometry.dispose();
         meshes[batchIndex].geometry = geometry;
       } else {
-        const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial());
+        const mesh = new THREE.Mesh(geometry, loadingMaterial);
         mesh.frustumCulled = false;
         meshes.push(mesh);
         getScene()?.add(mesh);
