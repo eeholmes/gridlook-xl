@@ -201,6 +201,64 @@ async function determineGridTypeFromData(
   return GRID_TYPES.IRREGULAR;
 }
 
+async function detectVariableGridType(
+  datasources: TSources,
+  varnameSelector: string
+): Promise<T_GRID_TYPES> {
+  const datavar = await ZarrDataManager.getVariableInfo(
+    ZarrDataManager.getDatasetSource(datasources, varnameSelector),
+    varnameSelector,
+    datasources?.zarr_format
+  );
+
+  // Fetch dimension names first — for indexed datasets this is a fast
+  // in-memory lookup (dimensionNames are cached in source.attrs).
+  const dimensions = await ZarrDataManager.getDimensionNames(
+    datasources,
+    varnameSelector
+  );
+
+  // Fast path: plain lat/lon dimensions unambiguously identify a regular
+  // grid.  Rotated grids use rlat/rlon instead and still need CRS detection
+  // to return REGULAR_ROTATED.  Skip the expensive CRS network requests for
+  // the common non-rotated case.
+  const hasRotatedDims = dimensions.some((d) => d === "rlat" || d === "rlon");
+  if (!hasRotatedDims && checkRegularGridFromDimensions(dimensions)) {
+    return GRID_TYPES.REGULAR;
+  }
+
+  // Check CRS-based grid types (needed for rotated, healpix, projected grids)
+  const crsGridType = await determineGridTypeFromCRS(
+    datasources,
+    varnameSelector
+  );
+  if (crsGridType) {
+    return crsGridType;
+  }
+
+  if (checkRegularGridFromDimensions(dimensions)) {
+    return GRID_TYPES.REGULAR;
+  }
+
+  const dataGridType = await determineGridTypeFromData(
+    datavar,
+    datasources,
+    varnameSelector
+  );
+  if (dataGridType) {
+    return dataGridType;
+  }
+
+  // Projected xy grids (e.g. EPSG:3857 with spatial_ref): handled as
+  // regular grids after converting x/y coordinates to lat/lon.
+  // Kept as a fallback so curvilinear datasets with x/y dimensions and
+  // explicit 2-D lat/lon coordinates are not misclassified.
+  if (checkXYGridFromDimensions(dimensions)) {
+    return GRID_TYPES.REGULAR;
+  }
+  return GRID_TYPES.ERROR;
+}
+
 export async function getGridType(
   sourceValid: boolean,
   varnameSelector: string,
@@ -218,47 +276,7 @@ export async function getGridType(
   }
 
   try {
-    const datavar = await ZarrDataManager.getVariableInfo(
-      ZarrDataManager.getDatasetSource(datasources!, varnameSelector),
-      varnameSelector,
-      datasources?.zarr_format
-    );
-
-    // Check CRS-based grid types
-    const crsGridType = await determineGridTypeFromCRS(
-      datasources!,
-      varnameSelector
-    );
-    if (crsGridType) {
-      return crsGridType;
-    }
-
-    const dimensions = await ZarrDataManager.getDimensionNames(
-      datasources!,
-      varnameSelector
-    );
-    if (checkRegularGridFromDimensions(dimensions)) {
-      return GRID_TYPES.REGULAR;
-    }
-
-    const dataGridType = await determineGridTypeFromData(
-      datavar,
-      datasources,
-      varnameSelector
-    );
-    if (dataGridType) {
-      return dataGridType;
-    }
-
-    // Projected xy grids (e.g. EPSG:3857 with spatial_ref): handled as
-    // regular grids after converting x/y coordinates to lat/lon.
-    // Kept as a fallback so curvilinear datasets with x/y dimensions and
-    // explicit 2-D lat/lon coordinates are not misclassified.
-    if (checkXYGridFromDimensions(dimensions)) {
-      return GRID_TYPES.REGULAR;
-    }
-    logError("No matching grid type found", "Could not determine grid type");
-    return GRID_TYPES.ERROR;
+    return await detectVariableGridType(datasources!, varnameSelector);
   } catch (error) {
     logError(error, "Could not determine grid type");
     return GRID_TYPES.ERROR;

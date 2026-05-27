@@ -324,24 +324,31 @@ export class ZarrDataManager {
     // rioxarray / xarray-spatial) for a variable carrying CRS metadata.
     if (datavar.attrs?.coordinates) {
       const coords = String(datavar.attrs.coordinates).split(" ");
-      for (const coord of coords) {
-        try {
-          const resolved = this.resolveVariableReference(
-            datasources,
-            varname,
-            coord
-          );
-          const coordVar = await this.getVariableInfo(
-            resolved.datasource,
-            resolved.variable,
-            datasources.zarr_format
-          );
-          if (coordVar.attrs?.crs_wkt || coordVar.attrs?.grid_mapping_name) {
-            return coord;
+      const results = await Promise.all(
+        coords.map(async (coord) => {
+          try {
+            const resolved = this.resolveVariableReference(
+              datasources,
+              varname,
+              coord
+            );
+            const coordVar = await this.getVariableInfo(
+              resolved.datasource,
+              resolved.variable,
+              datasources.zarr_format
+            );
+            if (coordVar.attrs?.crs_wkt || coordVar.attrs?.grid_mapping_name) {
+              return coord;
+            }
+          } catch {
+            // Not a CRS variable or not found — continue scanning.
           }
-        } catch {
-          // Not a CRS variable or not found — continue scanning.
-        }
+          return null;
+        })
+      );
+      const found = results.find((r) => r !== null);
+      if (found !== undefined) {
+        return found;
       }
     }
 

@@ -232,28 +232,24 @@ export function useSharedGridLogic() {
     dimensionRanges: TDimensionRange[],
     dimSlidersValues: (number | zarr.Slice | null)[]
   ): Promise<TDimInfo[]> {
-    const array: TDimInfo[] = [];
-    for (let i = 0; i < dimensionRanges.length; i++) {
-      const dim = dimensionRanges[i];
-      if (dim?.name === "time") {
-        const timeInfo = await getTimeInfo(
-          datasources,
-          currentVariable,
-          dimensionRanges,
-          i,
-          dimSlidersValues[i] as number
-        );
-        array.push(timeInfo);
-      } else {
-        const dimInfo = await getDimensionInfo(
+    return Promise.all(
+      dimensionRanges.map((dim, i) => {
+        if (dim?.name === "time") {
+          return getTimeInfo(
+            datasources,
+            currentVariable,
+            dimensionRanges,
+            i,
+            dimSlidersValues[i] as number
+          );
+        }
+        return getDimensionInfo(
           datasources.levels[0].datasources[currentVariable],
           dim!,
           dimSlidersValues[i] as number
         );
-        array.push(dimInfo);
-      }
-    }
-    return array;
+      })
+    );
   }
 
   const lastHistogramSummary = ref<THistogramSummary | null>(null);
