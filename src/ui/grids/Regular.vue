@@ -91,6 +91,10 @@ const longitudes = ref(new Float64Array());
 const latitudes = ref(new Float64Array());
 
 const BATCH_SIZE = 60;
+// Maximum number of geometry vertices per lat/lon axis. Large grids are
+// subsampled so makeGeometry stays fast; the full-resolution data texture
+// is unaffected and provides the actual rendering detail.
+const MAX_GEO_RESOLUTION = 512;
 const HALF_CIRCLE_DEGREES = 180;
 const FULL_CIRCLE_DEGREES = 360;
 let meshes: THREE.Mesh[] = [];
@@ -306,6 +310,9 @@ function isLongitudeGlobal(longitudes: Float64Array): boolean {
 function generateBatchGeometryData(
   latitudes: Float64Array,
   longitudes: Float64Array,
+  latOrigIndices: Int32Array,
+  lonOrigIndices: Int32Array,
+  originalLatCount: number,
   latStart: number,
   latEnd: number,
   isReversed: boolean,
@@ -322,13 +329,16 @@ function generateBatchGeometryData(
   const latLonValues = new Float32Array(vertexCount * 2);
   // UV v spans the full source texture latitude range, so we normalize
   // against total latitude count instead of only this batch size.
-  const latDenominator = Math.max(latitudes.length - 1, 1);
+  const latDenominator = Math.max(originalLatCount - 1, 1);
 
   const helper = projectionHelper.value;
 
   for (let li = 0; li < batchLatCount; li++) {
     const globalLatIdx = latStart + li;
     const rawLat = latitudes[globalLatIdx];
+    // Original lat index in the (possibly reversed) full-resolution array,
+    // used to compute the correct UV v coordinate into the data texture.
+    const latOrigIdx = latOrigIndices[globalLatIdx];
     for (let lj = 0; lj < lonCount; lj++) {
       const rawLon = longitudes[lj];
 
@@ -355,10 +365,10 @@ function generateBatchGeometryData(
       // Pixel-centre UVs: place each vertex at the centre of its texel so that
       // nearest-neighbour cell boundaries align with the midpoints between data
       // points (fixes the half-cell-east visual shift).
-      const u = (lj + 0.5) / textureLonCount;
+      const u = (lonOrigIndices[lj] + 0.5) / textureLonCount;
       const v = isReversed
-        ? (latitudes.length - 1 - globalLatIdx) / latDenominator
-        : globalLatIdx / latDenominator;
+        ? (originalLatCount - 1 - latOrigIdx) / latDenominator
+        : latOrigIdx / latDenominator;
       uvs[vertexIdx * 2] = u;
       uvs[vertexIdx * 2 + 1] = v;
     }
@@ -372,10 +382,11 @@ function generateGridIndices(
   lonCount: number,
   isGlobal: boolean
 ) {
-  const indices: number[] = [];
   const latIterationEnd = latCount - 1;
   const lonIterationEnd = isGlobal ? lonCount : lonCount - 1;
-
+  const numIndices = latIterationEnd * lonIterationEnd * 6;
+  const indices = new Uint32Array(numIndices);
+  let i = 0;
   for (let latIt = 0; latIt < latIterationEnd; latIt++) {
     for (let lonIt = 0; lonIt < lonIterationEnd; lonIt++) {
       const nextJ = isGlobal ? (lonIt + 1) % lonCount : lonIt + 1;
@@ -384,8 +395,12 @@ function generateGridIndices(
       const topLeft = (latIt + 1) * lonCount + lonIt;
       const topRight = (latIt + 1) * lonCount + nextJ;
 
-      indices.push(lowLeft, topRight, topLeft);
-      indices.push(lowLeft, lowRight, topRight);
+      indices[i++] = lowLeft;
+      indices[i++] = topRight;
+      indices[i++] = topLeft;
+      indices[i++] = lowLeft;
+      indices[i++] = lowRight;
+      indices[i++] = topRight;
     }
   }
 
@@ -395,6 +410,35 @@ function generateGridIndices(
 function normalizeLongitudes(longitudes: Float64Array): Float64Array {
   // Normalize longitudes to [0, 360)
   return Float64Array.from(longitudes, (lon) => ((lon % 360) + 360) % 360);
+}
+
+/**
+ * Subsample a coordinate array to at most `maxVerts` vertices, selecting
+ * indices distributed linearly from first to last.  Returns the subsampled
+ * coordinate values and the corresponding original indices so that UV
+ * coordinates can be mapped back to the full-resolution data texture.
+ * When the array is already small enough, it is returned unchanged with a
+ * trivial identity index map (no copy).
+ */
+function subsampleCoords(
+  arr: Float64Array,
+  maxVerts: number
+): { coords: Float64Array; origIndices: Int32Array } {
+  if (arr.length <= maxVerts) {
+    const origIndices = new Int32Array(arr.length);
+    for (let i = 0; i < arr.length; i++) {
+      origIndices[i] = i;
+    }
+    return { coords: arr, origIndices };
+  }
+  const coords = new Float64Array(maxVerts);
+  const origIndices = new Int32Array(maxVerts);
+  for (let i = 0; i < maxVerts; i++) {
+    const j = Math.round((i * (arr.length - 1)) / (maxVerts - 1));
+    origIndices[i] = j;
+    coords[i] = arr[j];
+  }
+  return { coords, origIndices };
 }
 
 /**
@@ -418,32 +462,51 @@ async function getRegularGridParameters() {
   // Save original count before the global wrap-around vertex is appended;
   // the texture has only this many pixels in the longitude direction.
   const textureLonCount = longitudeValues.length;
+  const originalLatCount = latitudeValues.length;
 
+  // Subsample lat/lon for the geometry mesh when the grid is very large.
+  // The data texture retains full resolution; subsampled vertices store their
+  // original indices so UV coordinates are mapped correctly to the texture.
+  const { coords: geoLats, origIndices: latOrigIndices } = subsampleCoords(
+    latitudeValues,
+    MAX_GEO_RESOLUTION
+  );
+  const { coords: geoLonsPre, origIndices: lonOrigIndicesPre } =
+    subsampleCoords(longitudeValues, MAX_GEO_RESOLUTION);
+
+  // Build geo longitude array with optional global wrap vertex, and extend the
+  // orig-indices array with a sentinel (textureLonCount) for the wrap vertex so
+  // that its UV u lands just past 1.0 and RepeatWrapping samples pixel 0.
+  let geoLongitudes: Float64Array;
+  let lonOrigIndices: Int32Array;
   if (isGlobal) {
-    // Add a duplicate of the first longitude + 360 to close the globe
-    const firstLon = longitudeValues[0];
-    longitudeValues = new Float64Array([...longitudeValues, firstLon + 360]);
+    geoLongitudes = new Float64Array([...geoLonsPre, geoLonsPre[0] + 360]);
+    lonOrigIndices = new Int32Array(lonOrigIndicesPre.length + 1);
+    lonOrigIndices.set(lonOrigIndicesPre);
+    lonOrigIndices[lonOrigIndicesPre.length] = textureLonCount;
+  } else {
+    geoLongitudes = geoLonsPre;
+    lonOrigIndices = lonOrigIndicesPre;
   }
 
-  let poleLat, poleLon;
+  let poleLat: number | undefined, poleLon: number | undefined;
   if (isRotated) {
-    const rotatedNorthPole = await getRotatedNorthPole();
-    poleLat = rotatedNorthPole.lat;
-    poleLon = rotatedNorthPole.lon;
+    ({ lat: poleLat, lon: poleLon } = await getRotatedNorthPole());
   }
-  const latCount = latitudeValues.length;
-  const lonCount = longitudeValues.length;
 
   return {
-    latitudeValues,
-    longitudeValues,
+    geoLatitudes: geoLats,
+    geoLongitudes,
+    latOrigIndices,
+    lonOrigIndices,
+    originalLatCount,
     textureLonCount,
     isLatReversed,
     isRotated,
     poleLat,
     poleLon,
-    latCount,
-    lonCount,
+    geoLatCount: geoLats.length,
+    geoLonCount: geoLongitudes.length,
     isGlobal,
   };
 }
@@ -460,14 +523,17 @@ function cleanupMeshes(totalBatches: number) {
 }
 
 function createBatchGeometry(
-  latitudeValues: Float64Array,
-  longitudeValues: Float64Array,
+  geoLatitudes: Float64Array,
+  geoLongitudes: Float64Array,
+  latOrigIndices: Int32Array,
+  lonOrigIndices: Int32Array,
+  originalLatCount: number,
   textureLonCount: number,
   isLatReversed: boolean,
   isRotated: boolean,
   poleLat: number | undefined,
   poleLon: number | undefined,
-  lonCount: number,
+  geoLonCount: number,
   isGlobal: boolean,
   latStart: number,
   latEnd: number
@@ -476,8 +542,11 @@ function createBatchGeometry(
 
   const batchLatCount = latEnd - latStart + 1;
   const { positionValues, uvs, latLonValues } = generateBatchGeometryData(
-    latitudeValues,
-    longitudeValues,
+    geoLatitudes,
+    geoLongitudes,
+    latOrigIndices,
+    lonOrigIndices,
+    originalLatCount,
     latStart,
     latEnd,
     isLatReversed,
@@ -497,44 +566,37 @@ function createBatchGeometry(
     new THREE.Float32BufferAttribute(latLonValues, 2)
   );
 
-  // Generate indices for this batch
-  const indices = generateGridIndices(batchLatCount, lonCount, isGlobal);
-  geometry.setIndex(indices);
+  // Generate indices for this batch; wrap in a BufferAttribute so THREE.js
+  // uses the typed array directly without re-allocating.
+  const indices = generateGridIndices(batchLatCount, geoLonCount, isGlobal);
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   return geometry;
 }
 
 async function makeGeometry() {
   try {
-    const {
-      latitudeValues,
-      longitudeValues,
-      textureLonCount,
-      isLatReversed,
-      isRotated,
-      poleLat,
-      poleLon,
-      latCount,
-      lonCount,
-      isGlobal,
-    } = await getRegularGridParameters();
+    const p = await getRegularGridParameters();
 
-    const totalBatches = Math.ceil((latCount - 1) / BATCH_SIZE);
+    const totalBatches = Math.ceil((p.geoLatCount - 1) / BATCH_SIZE);
     cleanupMeshes(totalBatches);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       const latStart = batchIndex * BATCH_SIZE;
-      const latEnd = Math.min(latStart + BATCH_SIZE, latCount - 1);
+      const latEnd = Math.min(latStart + BATCH_SIZE, p.geoLatCount - 1);
 
       const geometry = createBatchGeometry(
-        latitudeValues,
-        longitudeValues,
-        textureLonCount,
-        isLatReversed,
-        isRotated,
-        poleLat,
-        poleLon,
-        lonCount,
-        isGlobal,
+        p.geoLatitudes,
+        p.geoLongitudes,
+        p.latOrigIndices,
+        p.lonOrigIndices,
+        p.originalLatCount,
+        p.textureLonCount,
+        p.isLatReversed,
+        p.isRotated,
+        p.poleLat,
+        p.poleLon,
+        p.geoLonCount,
+        p.isGlobal,
         latStart,
         latEnd
       );
