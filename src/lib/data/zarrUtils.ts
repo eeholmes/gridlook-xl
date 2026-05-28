@@ -955,9 +955,24 @@ async function loadGeostatCoords(
     getGeostatCRSParams(datasources, currentVarname),
   ]);
 
+  // CF-convention geostationary datasets (e.g. Himawari-8 AHI, GOES-R ABI)
+  // store x_geostationary / y_geostationary as scan angles in radians.
+  // The PROJ `geos` inverse formula in invGeostatPoint expects coordinates
+  // in metres.  Multiply by H = h + a (satellite orbital radius) to convert.
+  const H = params.h + params.a;
+  const xUnitsRad =
+    hasUnits(xArray.attrs) &&
+    xArray.attrs.units.toLowerCase().startsWith("rad");
+  const yUnitsRad =
+    hasUnits(yArray.attrs) &&
+    yArray.attrs.units.toLowerCase().startsWith("rad");
+
+  const xRawBase = castDataVarToFloat32(xData.data);
+  const yRawBase = castDataVarToFloat32(yData.data);
+
   return {
-    xRaw: castDataVarToFloat32(xData.data),
-    yRaw: castDataVarToFloat32(yData.data),
+    xRaw: xUnitsRad ? xRawBase.map((v) => v * H) : xRawBase,
+    yRaw: yUnitsRad ? yRawBase.map((v) => v * H) : yRawBase,
     ...params,
   };
 }
