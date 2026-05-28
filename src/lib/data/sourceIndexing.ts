@@ -155,8 +155,15 @@ async function collectVariables(
       ({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) => path
     );
   const candidates: PromiseSettledResult<Record<string, TDataSource>>[] = [];
-  for (let i = 0; i < arrayPaths.length; i += METADATA_OPEN_BATCH_SIZE) {
-    const pathBatch = arrayPaths.slice(i, i + METADATA_OPEN_BATCH_SIZE);
+  for (
+    let offset = 0;
+    offset < arrayPaths.length;
+    offset += METADATA_OPEN_BATCH_SIZE
+  ) {
+    const pathBatch = arrayPaths.slice(
+      offset,
+      offset + METADATA_OPEN_BATCH_SIZE
+    );
     const batchResults = await Promise.allSettled(
       pathBatch.map((path) => collectArrayEntry(path, root, src, dimensions))
     );
@@ -240,8 +247,15 @@ async function collectVariablesFromNodeList(
     .filter((node) => node.nodeData?.type === "array")
     .filter((node) => isNodeWithinGroup(node.path, groupAbsPath));
   const candidates: PromiseSettledResult<Record<string, TDataSource>>[] = [];
-  for (let i = 0; i < arrayNodes.length; i += METADATA_OPEN_BATCH_SIZE) {
-    const nodeBatch = arrayNodes.slice(i, i + METADATA_OPEN_BATCH_SIZE);
+  for (
+    let offset = 0;
+    offset < arrayNodes.length;
+    offset += METADATA_OPEN_BATCH_SIZE
+  ) {
+    const nodeBatch = arrayNodes.slice(
+      offset,
+      offset + METADATA_OPEN_BATCH_SIZE
+    );
     const batchResults = await Promise.allSettled(
       nodeBatch.map((node) =>
         collectNodeListedVariable(
