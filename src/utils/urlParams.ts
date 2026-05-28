@@ -15,12 +15,21 @@ const URL_PARAMETERS = {
   PROJECTION_CENTER_LON: "projectionCenterLon",
   GRID_TYPE: "gridtype",
   CATALOG: "catalog",
+  CRS: "crs",
   DIM_INDICES: "dimIndices",
   DIM_MIN_BOUNDS: "dimMinBounds",
   DIM_MAX_BOUNDS: "dimMaxBounds",
 } as const;
 
 type TURLParameterValues = (typeof URL_PARAMETERS)[keyof typeof URL_PARAMETERS];
+
+export function getHashUrlParams(): URLSearchParams {
+  if (typeof window === "undefined") {
+    return new URLSearchParams();
+  }
+  const [, ...paramArray] = window.location.hash.substring(1).split("::");
+  return new URLSearchParams(paramArray.join("&"));
+}
 
 export { URL_PARAMETERS };
 export type { TURLParameterValues };

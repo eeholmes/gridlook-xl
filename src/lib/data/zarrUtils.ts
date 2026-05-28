@@ -7,6 +7,7 @@ import {
   type TSources,
   type TValueTransform,
 } from "@/lib/types/GlobeTypes.ts";
+import { URL_PARAMETERS, getHashUrlParams } from "@/utils/urlParams.ts";
 
 export function getMissingValue(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
@@ -531,8 +532,8 @@ export function isWebMercatorCRS(crsWkt: string): boolean {
  * projected CRS (e.g. EPSG:3857 / Web Mercator) and convert them to
  * WGS-84 latitude / longitude arrays suitable for the Regular grid renderer.
  *
- * The CRS is inferred from the `spatial_ref` (or equivalent) variable that is
- * referenced in the data variable's `coordinates` attribute.
+ * The CRS is inferred from the dataset metadata when available and otherwise
+ * from a URL/catalog override.
  *
  * @throws {Error} when the CRS is not currently supported.
  */
@@ -564,8 +565,7 @@ export async function getXYCoordinatesAsLatLon(
     ZarrDataManager.getVariableDataFromArray(yArray),
   ]);
 
-  const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
-  const crsWkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
+  const crsWkt = await getCRSStringForXYVariable(datasources, currentVarname);
 
   if (isWebMercatorCRS(crsWkt)) {
     const xRaw = castDataVarToFloat32(xData.data);
@@ -598,6 +598,9 @@ export async function getXYCoordinatesAsLatLon(
 export function isPolarStereographicCRS(str: string): boolean {
   const lower = str.toLowerCase();
   return (
+    lower === "epsg:3031" ||
+    lower === "epsg:3413" ||
+    lower === "epsg:3995" ||
     lower.includes("polar_stereographic") ||
     (lower.includes("+proj=stere") &&
       (lower.includes("+lat_0=-90") ||
@@ -606,12 +609,52 @@ export function isPolarStereographicCRS(str: string): boolean {
   );
 }
 
+function getCRSOverrideFromUrl(): string {
+  return String(getHashUrlParams().get(URL_PARAMETERS.CRS) ?? "").trim();
+}
+
+function getKnownPolarStereoParams(
+  crsStr: string
+): { isNorthPole: boolean; centralMeridian: number } | null {
+  const normalized = crsStr.trim().toLowerCase();
+  if (normalized === "epsg:3031") {
+    return { isNorthPole: false, centralMeridian: 0 };
+  }
+  if (normalized === "epsg:3413") {
+    return { isNorthPole: true, centralMeridian: -45 };
+  }
+  if (normalized === "epsg:3995") {
+    return { isNorthPole: true, centralMeridian: 0 };
+  }
+  return null;
+}
+
+function getPolarStereoParamsFromString(
+  crsStr: string
+): { isNorthPole: boolean; centralMeridian: number } | null {
+  const knownParams = getKnownPolarStereoParams(crsStr);
+  if (knownParams) {
+    return knownParams;
+  }
+
+  const lat0Match = crsStr.match(/\+lat_0=(-?\d+(?:\.\d+)?)/i);
+  const lon0Match = crsStr.match(/\+lon_0=(-?\d+(?:\.\d+)?)/i);
+  const latOrigin = lat0Match ? parseFloat(lat0Match[1]) : NaN;
+  const centralMeridian = lon0Match ? parseFloat(lon0Match[1]) : 0;
+  if (Number.isFinite(latOrigin)) {
+    return { isNorthPole: latOrigin >= 0, centralMeridian };
+  }
+
+  return null;
+}
+
 /**
- * Retrieve a CRS string (WKT or PROJ4) describing the coordinate reference
- * system for an XY grid variable.  Tries the dedicated CRS variable first,
- * then falls back to group-level PROJ4 attributes written by rioxarray.
+ * Retrieve a CRS string (WKT, PROJ4, or override token such as `EPSG:3031`)
+ * describing the coordinate reference system for an XY grid variable. Tries
+ * the dedicated CRS variable first, then group-level PROJ4 attributes written
+ * by rioxarray, and finally a URL/catalog override.
  *
- * Returns an empty string when no CRS information is found.
+ * Returns an empty string when no CRS information is found anywhere.
  */
 export async function getCRSStringForXYVariable(
   datasources: TSources,
@@ -642,7 +685,7 @@ export async function getCRSStringForXYVariable(
   } catch {
     // No group-level CRS attrs
   }
-  return "";
+  return getCRSOverrideFromUrl();
 }
 
 /** WGS-84 semi-major axis in metres, used for inverse polar stereographic. */
@@ -697,9 +740,9 @@ function invPolarStereoPoint(
 }
 
 /**
- * Extract the hemisphere and central meridian from the CRS variable
- * attached to `currentVarname`.  Falls back to the proj4_params group
- * attribute when no dedicated CRS variable is present.
+ * Extract the hemisphere and central meridian from the CRS metadata attached
+ * to `currentVarname`. Falls back to group-level projection metadata and then
+ * to any URL/catalog CRS override when no dedicated CRS variable is present.
  *
  * @returns `{ isNorthPole, centralMeridian }` where `centralMeridian`
  *          is in degrees.
@@ -729,20 +772,11 @@ export async function getPolarStereoCRSParams(
 
   // Fall back to parsing the PROJ4 string.
   try {
-    const source = ZarrDataManager.getDatasetSource(
-      datasources,
-      currentVarname
+    const polarParams = getPolarStereoParamsFromString(
+      await getCRSStringForXYVariable(datasources, currentVarname)
     );
-    const group = await ZarrDataManager.getDatasetGroup(source);
-    const proj4 = String(group.attrs?.proj4_params ?? "");
-    if (proj4) {
-      const lat0Match = proj4.match(/\+lat_0=(-?\d+(?:\.\d+)?)/);
-      const lon0Match = proj4.match(/\+lon_0=(-?\d+(?:\.\d+)?)/);
-      const latOrigin = lat0Match ? parseFloat(lat0Match[1]) : NaN;
-      const centralMeridian = lon0Match ? parseFloat(lon0Match[1]) : 0;
-      if (Number.isFinite(latOrigin)) {
-        return { isNorthPole: latOrigin >= 0, centralMeridian };
-      }
+    if (polarParams) {
+      return polarParams;
     }
   } catch {
     // No group-level attrs — fall through.

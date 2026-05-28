@@ -5,7 +5,11 @@ import CatalogPanel from "./CatalogPanel.vue";
 
 import { useGlobeControlStore } from "@/store/store.ts";
 import Modal from "@/ui/common/Modal.vue";
-import { fetchCatalog, type TCatalogEntry } from "@/utils/catalog.ts";
+import {
+  fetchCatalog,
+  findCatalogEntryByUrl,
+  type TCatalogEntry,
+} from "@/utils/catalog.ts";
 
 const props = defineProps<{ currentSource: string }>();
 
@@ -68,9 +72,13 @@ async function setLocationHash() {
   }
 
   const catUrl = store.catalogUrl;
+  const crs = findCatalogEntryByUrl(store.catalogData, next)?.crs;
   if (catUrl) {
     location.hash =
-      "#" + next + (catUrl ? "::catalog=" + encodeURIComponent(catUrl) : "");
+      "#" +
+      next +
+      (catUrl ? "::catalog=" + encodeURIComponent(catUrl) : "") +
+      (crs ? "::crs=" + encodeURIComponent(crs) : "");
   } else {
     location.hash = "#" + next;
   }
@@ -80,7 +88,10 @@ async function setLocationHash() {
 function onCatalogSelect(entry: TCatalogEntry) {
   const catUrl = store.catalogUrl;
   location.hash =
-    "#" + entry.url + (catUrl ? "::catalog=" + encodeURIComponent(catUrl) : "");
+    "#" +
+    entry.url +
+    (catUrl ? "::catalog=" + encodeURIComponent(catUrl) : "") +
+    (entry.crs ? "::crs=" + encodeURIComponent(entry.crs) : "");
   close();
 }
 
@@ -90,6 +101,10 @@ onMounted(async () => {
       const data = await fetchCatalog(store.catalogUrl);
       if (data) {
         store.catalogData = data;
+        const entry = findCatalogEntryByUrl(data, props.currentSource);
+        if (entry?.crs && !location.hash.includes("::crs=")) {
+          location.hash += "::crs=" + encodeURIComponent(entry.crs);
+        }
         return;
       }
     } catch {
