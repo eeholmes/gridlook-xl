@@ -9,6 +9,12 @@ const visible = ref(false);
 <template>
   <Modal v-model="visible" title="About Gridlook">
     <p>
+      This is a heavily modified fork of GridLook by EE Holmes (@eeholmes). 
+      This fork is for experimentation and testing extensions of GridLook ideas for vizualization of icechunk, grouped Zarr, multilevel GeoZarr and polar data.
+      https://github.com/eeholmes/gridlook
+    </p>
+    <br />
+    <p>
       GridLook is a WebGL-based viewer for Earth system model (ESM) output. It
       supports cloud-hosted Zarr datasets and provides interactive grid
       visualization tools.
@@ -30,7 +36,7 @@ const visible = ref(false);
           <span class="icon">
             <i class="fa-brands fa-github"></i>
           </span>
-          <span>View on GitHub</span>
+          <span>View GridLook on GitHub</span>
         </a>
       </p>
     </template>
