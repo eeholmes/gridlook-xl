@@ -15,6 +15,16 @@ type TNodeListedStore = zarr.AsyncReadable & {
   listNodes: () => Array<{ path: string; nodeData?: { type?: string } }>;
 };
 
+async function openGroup(
+  store: zarr.Location<zarr.AsyncReadable> | zarr.AsyncReadable,
+  format: "v2" | "v3"
+): Promise<zarr.Group<zarr.AsyncReadable>> {
+  if (format === "v2") {
+    return await zarr.open.v2(store, { kind: "group" });
+  }
+  return await zarr.open.v3(store, { kind: "group" });
+}
+
 function isNodeListedStore(
   store: zarr.AsyncReadable
 ): store is TNodeListedStore {
@@ -34,12 +44,12 @@ async function openDatasetGroup(
   const baseStore = await ZarrDataManager.createNewStore(storePath);
   try {
     const store = await zarr.withConsolidatedMetadata(baseStore, { format });
-    return await zarr.open(store, { kind: "group" });
+    return await openGroup(store, format);
   } catch (consolidatedError) {
     const fallbackStore = await ZarrDataManager.createNewStore(storePath);
     const store = zarr.root(fallbackStore);
     try {
-      return await zarr.open(store, { kind: "group" });
+      return await openGroup(store, format);
     } catch (unconsolidatedError) {
       throw new AggregateError(
         [consolidatedError, unconsolidatedError],
@@ -373,7 +383,7 @@ export async function indexFromZarr(src: string): Promise<TSources> {
       await ZarrDataManager.createNewStore(src),
       { format: "v2" }
     );
-    const root = await zarr.open(store, { kind: "group" });
+    const root = await openGroup(store, "v2");
     const datasources = await processZarrVariables(store, root, src);
     return createIndex(
       root.attrs?.title as string,
@@ -387,7 +397,7 @@ export async function indexFromZarr(src: string): Promise<TSources> {
         await ZarrDataManager.createNewStore(src),
         { format: "v3" }
       );
-      const root = await zarr.open(store, { kind: "group" });
+      const root = await openGroup(store, "v3");
       const datasources = await processZarrVariables(store, root, src);
       return createIndex(
         root.attrs?.title as string,
