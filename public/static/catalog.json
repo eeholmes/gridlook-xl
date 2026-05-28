@@ -441,6 +441,56 @@
       "layout": "grouped",
       "grid": "utm",
       "crs": "EPSG:32637"
+    },
+    {
+      "title": "SILAM Global Dust Model Forecasts - Aerosol",
+      "url": "icechunk+https://data.source.coop/bkr/silam-dust/silam_aerosol.icechunk",
+      "format": "Zarr v3",
+      "access": "icechunk",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "SILAM Global Dust Model Forecasts - Dust",
+      "url": "https://data.source.coop/bkr/silam-dust/silam_global_dust_v3.zarr",
+      "format": "Zarr v3",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {    
+      "title": "SILAM Global Dust Model Forecasts - Dust",
+      "url": "https://data.source.coop/bkr/silam-dust/data.zarr",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "CAMS Aerosol Analysis from the Copernicus CAMS operational archive",
+      "url": "icechunk+https://data.source.coop/bkr/cams/cams.icechunk::dimIndices_time=4593::catalog=static%2Fcatalog.json",
+      "format": "Zarr v3",
+      "access": "icechunk",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "CAMS Aerosol Forecast from the Copernicus CAMS operational archive",
+      "url": "icechunk+https://data.source.coop/bkr/cams/cams_analysis_and_forecast.icechunk",
+      "format": "Zarr v3",
+      "access": "icechunk",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
     }
   ]
 }
