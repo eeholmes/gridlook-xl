@@ -958,8 +958,8 @@ async function loadGeostatCoords(
   // CF-convention geostationary datasets (e.g. Himawari-8 AHI, GOES-R ABI)
   // store x_geostationary / y_geostationary as scan angles in radians.
   // The PROJ `geos` inverse formula in invGeostatPoint expects coordinates
-  // in metres.  Multiply by H = h + a (satellite orbital radius) to convert.
-  const H = params.h + params.a;
+  // in metres.  Multiply by satelliteOrbitalRadius = h + a to convert.
+  const satelliteOrbitalRadius = params.h + params.a;
   const xUnitsRad =
     hasUnits(xArray.attrs) &&
     xArray.attrs.units.toLowerCase().startsWith("rad");
@@ -967,14 +967,20 @@ async function loadGeostatCoords(
     hasUnits(yArray.attrs) &&
     yArray.attrs.units.toLowerCase().startsWith("rad");
 
-  const xRawBase = castDataVarToFloat32(xData.data);
-  const yRawBase = castDataVarToFloat32(yData.data);
+  const xRaw = castDataVarToFloat32(xData.data);
+  const yRaw = castDataVarToFloat32(yData.data);
+  if (xUnitsRad) {
+    for (let i = 0; i < xRaw.length; i++) {
+      xRaw[i] *= satelliteOrbitalRadius;
+    }
+  }
+  if (yUnitsRad) {
+    for (let i = 0; i < yRaw.length; i++) {
+      yRaw[i] *= satelliteOrbitalRadius;
+    }
+  }
 
-  return {
-    xRaw: xUnitsRad ? xRawBase.map((v) => v * H) : xRawBase,
-    yRaw: yUnitsRad ? yRawBase.map((v) => v * H) : yRawBase,
-    ...params,
-  };
+  return { xRaw, yRaw, ...params };
 }
 
 /**
