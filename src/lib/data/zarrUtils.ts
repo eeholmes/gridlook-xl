@@ -105,11 +105,11 @@ export function isLongitudeName(name: string) {
 }
 
 export function isXName(name: string) {
-  return name === "x";
+  return name === "x" || name === "x_geostationary";
 }
 
 export function isYName(name: string) {
-  return name === "y";
+  return name === "y" || name === "y_geostationary";
 }
 
 export function isLatitudeVariable(name: string, attrs: unknown) {
@@ -619,6 +619,9 @@ export async function getCRSStringForXYVariable(
 ): Promise<string> {
   try {
     const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
+    if (crs.attrs?.grid_mapping_name === "geostationary") {
+      return "geostationary";
+    }
     if (crs.attrs?.grid_mapping_name === "polar_stereographic") {
       return "polar_stereographic";
     }
@@ -815,4 +818,191 @@ export async function computePolarStereoLatLon2D(
   }
 
   return { latitudes2D, longitudes2D, ny, nx, isNorthPole };
+}
+
+// ---------------------------------------------------------------------------
+// Geostationary projection support (PROJ `geos`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the string describes a geostationary projection.
+ */
+export function isGeostationaryCRS(str: string): boolean {
+  const lower = str.toLowerCase();
+  return lower.includes("geostationary") || lower.includes("+proj=geos");
+}
+
+/**
+ * Extract the projection parameters for a geostationary dataset from the
+ * CRS variable attached to `currentVarname`.
+ *
+ * @returns `{ lon0, h, a }` where `lon0` is the sub-satellite longitude (°),
+ *          `h` is the perspective point height above the surface (m), and
+ *          `a` is the semi-major axis (m).
+ */
+export async function getGeostatCRSParams(
+  datasources: TSources,
+  currentVarname: string
+): Promise<{ lon0: number; h: number; a: number }> {
+  const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
+  const lon0 = Number(
+    crs.attrs?.longitude_of_projection_origin ?? crs.attrs?.lon_0 ?? 0
+  );
+  const h = Number(
+    crs.attrs?.perspective_point_height ?? crs.attrs?.h ?? 35785831 // nominal geostationary orbit height
+  );
+  const a = Number(
+    crs.attrs?.semi_major_axis ?? crs.attrs?.a ?? 6378137 // WGS-84 semi-major
+  );
+  return { lon0, h, a };
+}
+
+/**
+ * Inverse geostationary (PROJ `geos`) projection — spherical Earth.
+ *
+ * Converts a single (x, y) point in the projected coordinate system
+ * (units: metres) to geographic (lat, lon) in degrees.
+ *
+ * Derivation uses PROJ4 `geos` forward formula:
+ *   Let rg = H/a, rg1 = h/a = rg - 1
+ *   x/a = rg * cos(φ) * sin(λ) / D,  y/a = sin(φ) / D
+ *   where D = rg1 + cos(φ)*cos(λ)
+ *
+ * Substituting C = cos(φ)*cos(λ), S = sin(φ), T = cos(φ)*sin(λ),
+ * with C² + S² + T² = 1 gives a quadratic in D, solved for the
+ * root that maps (0,0) to the sub-satellite point.
+ *
+ * @returns `{ lat, lon }` in degrees, or `null` when the point falls
+ *          outside the visible Earth disk.
+ */
+function invGeostatPoint(
+  x: number,
+  y: number,
+  h: number,
+  a: number,
+  lon0: number
+): { lat: number; lon: number } | null {
+  const rg = (h + a) / a; // satellite orbital radius / Earth radius
+  const rg1 = h / a; // = rg - 1
+
+  const xn = x / a;
+  const yn = y / a;
+
+  // Quadratic coefficients: a_q * D² - 2*rg1 * D + (rg1² - 1) = 0
+  const aq = 1 + yn * yn + (xn * xn) / (rg * rg);
+  const disc = rg1 * rg1 - aq * (rg1 * rg1 - 1);
+  if (disc < 0) {
+    return null; // outside Earth disk
+  }
+
+  const D = (rg1 + Math.sqrt(disc)) / aq;
+  const C = D - rg1; // = cos(φ)*cos(λ)
+  const S = yn * D; // = sin(φ)
+  const T = (xn * D) / rg; // = cos(φ)*sin(λ)
+
+  const lat = (Math.atan2(S, Math.sqrt(C * C + T * T)) * 180) / Math.PI;
+  let lon = (Math.atan2(T, C) * 180) / Math.PI + lon0;
+  if (lon > 180) {
+    lon -= 360;
+  }
+  if (lon <= -180) {
+    lon += 360;
+  }
+
+  return { lat, lon };
+}
+
+/**
+ * Load the 1-D x and y coordinate arrays for a geostationary grid along with
+ * the CRS projection parameters.
+ */
+async function loadGeostatCoords(
+  datasources: TSources,
+  currentVarname: string
+): Promise<{
+  xRaw: Float32Array;
+  yRaw: Float32Array;
+  lon0: number;
+  h: number;
+  a: number;
+}> {
+  const dimensions = await ZarrDataManager.getDimensionNames(
+    datasources,
+    currentVarname
+  );
+  const xDimName = dimensions.find(isXName) ?? "x_geostationary";
+  const yDimName = dimensions.find(isYName) ?? "y_geostationary";
+
+  const xRef = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    xDimName
+  );
+  const yRef = ZarrDataManager.resolveVariableReference(
+    datasources,
+    currentVarname,
+    yDimName
+  );
+
+  const [xArray, yArray] = await Promise.all([
+    ZarrDataManager.getVariableInfo(xRef.datasource, xRef.variable),
+    ZarrDataManager.getVariableInfo(yRef.datasource, yRef.variable),
+  ]);
+
+  const [xData, yData, params] = await Promise.all([
+    ZarrDataManager.getVariableDataFromArray(xArray),
+    ZarrDataManager.getVariableDataFromArray(yArray),
+    getGeostatCRSParams(datasources, currentVarname),
+  ]);
+
+  return {
+    xRaw: castDataVarToFloat32(xData.data),
+    yRaw: castDataVarToFloat32(yData.data),
+    ...params,
+  };
+}
+
+/**
+ * Compute geographic (lat/lon) 2-D coordinate arrays for a geostationary
+ * x/y grid by applying the inverse PROJ `geos` projection to every
+ * (xᵢ, yⱼ) grid point.
+ *
+ * The returned flat arrays have length `ny × nx` and are laid out in
+ * row-major order (j-major, i-minor), matching the data array layout
+ * expected by the Curvilinear grid renderer.  Points outside the visible
+ * Earth disk are stored as NaN.
+ */
+export async function computeGeostatLatLon2D(
+  datasources: TSources,
+  currentVarname: string
+): Promise<{
+  latitudes2D: Float64Array;
+  longitudes2D: Float64Array;
+  ny: number;
+  nx: number;
+}> {
+  const { xRaw, yRaw, lon0, h, a } = await loadGeostatCoords(
+    datasources,
+    currentVarname
+  );
+  const nx = xRaw.length;
+  const ny = yRaw.length;
+
+  const latitudes2D = new Float64Array(ny * nx);
+  const longitudes2D = new Float64Array(ny * nx);
+
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const result = invGeostatPoint(xRaw[i], yRaw[j], h, a, lon0);
+      if (result !== null) {
+        latitudes2D[j * nx + i] = result.lat;
+        longitudes2D[j * nx + i] = result.lon;
+      } else {
+        latitudes2D[j * nx + i] = NaN;
+        longitudes2D[j * nx + i] = NaN;
+      }
+    }
+  }
+
+  return { latitudes2D, longitudes2D, ny, nx };
 }
