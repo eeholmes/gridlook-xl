@@ -114,7 +114,7 @@
     },
     {
       "title": "Deutscher Wetterdienst (DWD) ICON-EU Numerical Weather Forecast",
-      "url": "icechunk+https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/",
+      "url": "icechunk+https://dynamical-dwd-icon-eu.s3.us-west-2.amazonaws.com/dwd-icon-eu-forecast-5-day/v0.2.0.icechunk/::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=cloud_cover_high::dimIndices_init_time=0::dimIndices_lead_time=0::camerastate=Jc05DsJAEETRuzgejXqpru7hKoiAgMCJzWIixN2xhSp7Qf3PdF9f8zavy3Q6j65eyaIA6QU26-WJ5PASM2Wg6W5DMlQzU1OGXdr0eF-323P530jXosaAByllQm_SLSyNEAHNmbpTEgjUsCMCs52CrnLMPdxRl-8P",
       "format": "Zarr v3",
       "access": "icechunk",
       "convention": null,
