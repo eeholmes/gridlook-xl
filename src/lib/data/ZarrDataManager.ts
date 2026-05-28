@@ -2,6 +2,8 @@ import { IcechunkStore } from "icechunk-js";
 import QuickLRU from "quick-lru";
 import * as zarr from "zarrita";
 
+import "./registerZarrCodecs.ts";
+
 import type {
   TDataSource,
   TSources,

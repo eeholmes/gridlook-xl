@@ -242,7 +242,12 @@ async function getDims() {
   isLatOnly.value = latOnlyCheck;
 
   const { latitudes: latitudeChunk, longitudes: longitudeChunk } =
-    await getLatLonData(datavar, props.datasources, varnameSelector.value);
+    await getLatLonData(
+      datavar,
+      props.datasources,
+      varnameSelector.value,
+      props.isRotated
+    );
 
   latitudes.value = new Float64Array(latitudeChunk.data as Float64Array);
   if (!longitudeChunk) {
