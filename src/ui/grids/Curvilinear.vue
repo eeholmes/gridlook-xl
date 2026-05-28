@@ -285,7 +285,7 @@ async function resolveLatLon2D(
       varnameSelector.value
     );
     isPolarStereo = isPolarStereographicCRS(crsStr);
-    isGeostat = !isPolarStereo && isGeostationaryCRS(crsStr);
+    isGeostat = isGeostationaryCRS(crsStr);
   } catch {
     // No CRS info available — treat as regular curvilinear.
   }

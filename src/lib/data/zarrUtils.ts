@@ -888,14 +888,14 @@ function invGeostatPoint(
   const xn = x / a;
   const yn = y / a;
 
-  // Quadratic coefficients: a_q * D² - 2*rg1 * D + (rg1² - 1) = 0
-  const aq = 1 + yn * yn + (xn * xn) / (rg * rg);
-  const disc = rg1 * rg1 - aq * (rg1 * rg1 - 1);
-  if (disc < 0) {
+  // Quadratic coefficients: quadraticCoeff * D² - 2*rg1 * D + (rg1² - 1) = 0
+  const quadraticCoeff = 1 + yn * yn + (xn * xn) / (rg * rg);
+  const discriminant = rg1 * rg1 - quadraticCoeff * (rg1 * rg1 - 1);
+  if (discriminant < 0) {
     return null; // outside Earth disk
   }
 
-  const D = (rg1 + Math.sqrt(disc)) / aq;
+  const D = (rg1 + Math.sqrt(discriminant)) / quadraticCoeff;
   const C = D - rg1; // = cos(φ)*cos(λ)
   const S = yn * D; // = sin(φ)
   const T = (xn * D) / rg; // = cos(φ)*sin(λ)
