@@ -115,5 +115,15 @@ onBeforeMount(() => {
 
 <template>
   <GlobeView v-if="isReady" :src="src" />
-  <div v-else />
+  <div v-else class="loader hash-view-loader" />
 </template>
+
+<style scoped>
+.hash-view-loader {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  height: 40px;
+  width: 40px;
+}
+</style>

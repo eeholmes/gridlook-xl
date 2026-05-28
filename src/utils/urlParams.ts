@@ -27,7 +27,7 @@ export function getHashUrlParams(): URLSearchParams {
   if (typeof window === "undefined") {
     return new URLSearchParams();
   }
-  const [, ...paramArray] = window.location.hash.substring(1).split("::");
+  const paramArray = window.location.hash.substring(1).split("::").slice(1);
   return new URLSearchParams(paramArray.join("&"));
 }
 
