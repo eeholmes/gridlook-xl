@@ -84,7 +84,7 @@
     },
     {
       "title": "ERA5 Hurricane Florence Atmospheric Reanalysis Layers",
-      "url": "https://atlantis-vis-o.s3-ext.jc.rl.ac.uk/hurricanes/era5/florence",
+      "url": "https://atlantis-vis-o.s3-ext.jc.rl.ac.uk/hurricanes/era5/florence::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=surface_pressure::dimIndices_time=0::camerastate=JYw5DsJAFMXuknoY_eX9jaugFBQUaRKWUCHuzqCUtmR_pvv2WvZlW6fzBV3BJS4waFahnVi7GnGwSIKlDC16ZCKZko20Muc2Pd7X_fZcjw31UbAQTFBlYY06RQHiGlnM5PV3rCjBIJcAzGO4NKZC-XgHJWL-_gA",
       "format": "Zarr v3",
       "access": "direct",
       "convention": null,
