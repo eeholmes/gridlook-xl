@@ -15,6 +15,8 @@ type TNodeListedStore = zarr.AsyncReadable & {
   listNodes: () => Array<{ path: string; nodeData?: { type?: string } }>;
 };
 
+const METADATA_OPEN_BATCH_SIZE = 32;
+
 function isNodeListedStore(
   store: zarr.AsyncReadable
 ): store is TNodeListedStore {
@@ -144,17 +146,22 @@ async function collectVariables(
   dimensions: Set<string>;
 }> {
   const dimensions = new Set<string>();
-  const candidates = await Promise.allSettled(
-    store
-      .contents()
-      .filter(
-        ({ kind }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
-          isArrayEntry(kind)
-      )
-      .map(({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
-        collectArrayEntry(path, root, src, dimensions)
-      )
-  );
+  const arrayPaths = store
+    .contents()
+    .filter(({ kind }: { path: zarr.AbsolutePath; kind: "array" | "group" }) =>
+      isArrayEntry(kind)
+    )
+    .map(
+      ({ path }: { path: zarr.AbsolutePath; kind: "array" | "group" }) => path
+    );
+  const candidates: PromiseSettledResult<Record<string, TDataSource>>[] = [];
+  for (let i = 0; i < arrayPaths.length; i += METADATA_OPEN_BATCH_SIZE) {
+    const pathBatch = arrayPaths.slice(i, i + METADATA_OPEN_BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      pathBatch.map((path) => collectArrayEntry(path, root, src, dimensions))
+    );
+    candidates.push(...batchResults);
+  }
 
   return { candidates, dimensions };
 }
@@ -228,12 +235,15 @@ async function collectVariablesFromNodeList(
   const groupAbsPath = groupPath ? `/${groupPath}` : null;
 
   const dimensions = new Set<string>();
-  const candidates = await Promise.allSettled(
-    store
-      .listNodes()
-      .filter((node) => node.nodeData?.type === "array")
-      .filter((node) => isNodeWithinGroup(node.path, groupAbsPath))
-      .map((node) =>
+  const arrayNodes = store
+    .listNodes()
+    .filter((node) => node.nodeData?.type === "array")
+    .filter((node) => isNodeWithinGroup(node.path, groupAbsPath));
+  const candidates: PromiseSettledResult<Record<string, TDataSource>>[] = [];
+  for (let i = 0; i < arrayNodes.length; i += METADATA_OPEN_BATCH_SIZE) {
+    const nodeBatch = arrayNodes.slice(i, i + METADATA_OPEN_BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      nodeBatch.map((node) =>
         collectNodeListedVariable(
           node,
           root,
@@ -243,7 +253,9 @@ async function collectVariablesFromNodeList(
           dimensions
         )
       )
-  );
+    );
+    candidates.push(...batchResults);
+  }
 
   return { candidates, dimensions };
 }
