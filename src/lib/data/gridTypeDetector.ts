@@ -186,10 +186,16 @@ async function determineGridTypeFromData(
 
   // For Gaussian-reduced vs. irregular we need actual coordinate values.
   // Fetch both arrays in parallel to minimise wall-clock time.
-  const [latitudes, longitudes] = await Promise.all([
-    ZarrDataManager.getVariableDataFromArray(latitudesVar),
-    ZarrDataManager.getVariableDataFromArray(longitudesVar),
-  ]);
+  let latitudes: zarr.Chunk<zarr.DataType>;
+  let longitudes: zarr.Chunk<zarr.DataType>;
+  try {
+    [latitudes, longitudes] = await Promise.all([
+      ZarrDataManager.getVariableDataFromArray(latitudesVar),
+      ZarrDataManager.getVariableDataFromArray(longitudesVar),
+    ]);
+  } catch {
+    return null;
+  }
   const latitudesData = latitudes.data as Float64Array;
   const longitudesData = longitudes.data as Float64Array;
 
