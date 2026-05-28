@@ -441,6 +441,16 @@
       "layout": "grouped",
       "grid": "utm",
       "crs": "EPSG:32637"
+    },
+    {
+      "title": "Himawari-8 AHI Full Disk Reflectance",
+      "url": "https://data.source.coop/bkr/geo/himawari_1000m.icechunk",
+      "format": "Zarr v3",
+      "access": "icechunk",
+      "convention": null,
+      "layout": "simple",
+      "grid": "geostationary",
+      "crs": "geos"
     }
   ]
 }

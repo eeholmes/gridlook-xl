@@ -4,6 +4,7 @@ import { ZarrDataManager } from "./ZarrDataManager.ts";
 import {
   getCRSStringForXYVariable,
   getLatLonVariableInfo,
+  isGeostationaryCRS,
   isLatitudeName,
   isLongitudeName,
   isPolarStereographicCRS,
@@ -125,6 +126,11 @@ async function determineGridTypeFromCRS(
     if (checkRegularRotatedGrid(crs)) {
       return GRID_TYPES.REGULAR_ROTATED;
     }
+    // Geostationary datasets are routed to CURVILINEAR so that
+    // computeGeostatLatLon2D can produce proper 2-D lat/lon arrays.
+    if (crs.attrs?.grid_mapping_name === "geostationary") {
+      return GRID_TYPES.CURVILINEAR;
+    }
     // Polar stereographic datasets are routed to CURVILINEAR so that
     // computePolarStereoLatLon2D can produce proper 2-D lat/lon arrays.
     if (crs.attrs?.grid_mapping_name === "polar_stereographic") {
@@ -142,6 +148,9 @@ async function determineGridTypeFromCRS(
       varnameSelector
     );
     if (isPolarStereographicCRS(crsStr)) {
+      return GRID_TYPES.CURVILINEAR;
+    }
+    if (isGeostationaryCRS(crsStr)) {
       return GRID_TYPES.CURVILINEAR;
     }
   } catch {

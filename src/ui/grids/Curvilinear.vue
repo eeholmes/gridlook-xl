@@ -15,13 +15,16 @@ import { ZarrDataManager } from "@/lib/data/ZarrDataManager.ts";
 import {
   applyDisplayTransformToData,
   castDataVarToFloat32,
+  computeGeostatLatLon2D,
   computePolarStereoLatLon2D,
   createMissingOrFillPredicate,
   getDataBounds,
   getCRSStringForXYVariable,
+  getGeostatCRSParams,
   getLatLonData,
   getMissingAndFillValues,
   getPolarStereoCRSParams,
+  isGeostationaryCRS,
   isPolarStereographicCRS,
   mapMissingAndFillToNaN,
 } from "@/lib/data/zarrUtils.ts";
@@ -70,6 +73,8 @@ const updatingData = ref(false);
 
 /** True when the loaded dataset uses a polar stereographic CRS. */
 const isPolarStereoData = ref(false);
+/** True when the loaded dataset uses a geostationary CRS. */
+const isGeostatData = ref(false);
 /** Aspect ratio (width / height = nx / ny) for the polar stereo grid canvas. */
 const polarAspectRatio = ref(1);
 /** Inline style for the canvas box — sets aspect-ratio when polar data is loaded. */
@@ -193,8 +198,10 @@ const colormapMaterial = computed(() => {
 async function datasourceUpdate() {
   clearHoverLookup();
   isPolarStereoData.value = false;
+  isGeostatData.value = false;
   if (props.datasources !== undefined) {
-    // Detect polar stereographic CRS and auto-configure projection/mask.
+    // Detect polar stereographic or geostationary CRS and auto-configure
+    // projection and mask.
     try {
       const crsStr = await getCRSStringForXYVariable(
         props.datasources,
@@ -212,10 +219,22 @@ async function datasourceUpdate() {
           varnameSelector.value
         );
         store.projectionCenter = { lat: isNorthPole ? 90 : -90, lon: 0 };
+      } else if (isGeostationaryCRS(crsStr)) {
+        isGeostatData.value = true;
+        // Use nearside-perspective projection centred on the sub-satellite
+        // point so the full disk is immediately visible.
+        store.projectionMode = PROJECTION_TYPES.NEARSIDE_PERSPECTIVE;
+        // The global land/sea mask is not meaningful for a geostationary domain.
+        store.landSeaMaskChoice = LAND_SEA_MASK_MODES.OFF;
+        const { lon0 } = await getGeostatCRSParams(
+          props.datasources,
+          varnameSelector.value
+        );
+        store.projectionCenter = { lat: 0, lon: lon0 };
       }
     } catch {
       // CRS lookup may fail for datasets without a CRS variable or group-level
-      // projection attributes.  Treat as a non-polar curvilinear grid.
+      // projection attributes.  Treat as a standard curvilinear grid.
     }
     await Promise.all([getData()]);
     updateLandSeaMask();
@@ -225,45 +244,65 @@ async function datasourceUpdate() {
 
 const BATCH_SIZE = 30;
 
-/**
- * Resolve the 2-D lat/lon coordinate arrays for a grid variable.
- * Returns proper geographic coordinates whether the variable uses named
- * lat/lon arrays (standard curvilinear) or x/y arrays with a polar
- * stereographic CRS (computed via inverse projection).
- */
-async function resolveLatLon2D(
-  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
-): Promise<{
+type TLatLon2DResult = {
   latitudesData: Float64Array;
   longitudesData: Float64Array;
   nj: number;
   ni: number;
-}> {
-  // Detect polar stereographic CRS.
+};
+
+/** Reshape a `computePolarStereoLatLon2D` / `computeGeostatLatLon2D` result. */
+function reshapeProjectedLatLon(result: {
+  latitudes2D: Float64Array;
+  longitudes2D: Float64Array;
+  ny: number;
+  nx: number;
+}): TLatLon2DResult {
+  polarAspectRatio.value = result.nx / result.ny;
+  return {
+    latitudesData: result.latitudes2D,
+    longitudesData: result.longitudes2D,
+    nj: result.ny,
+    ni: result.nx,
+  };
+}
+
+/**
+ * Resolve the 2-D lat/lon coordinate arrays for a grid variable.
+ * Returns proper geographic coordinates whether the variable uses named
+ * lat/lon arrays (standard curvilinear), x/y arrays with a polar
+ * stereographic CRS, or x/y arrays with a geostationary CRS.
+ */
+async function resolveLatLon2D(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+): Promise<TLatLon2DResult> {
+  // Detect projected CRS type.
   let isPolarStereo = false;
+  let isGeostat = false;
   try {
     const crsStr = await getCRSStringForXYVariable(
       props.datasources!,
       varnameSelector.value
     );
     isPolarStereo = isPolarStereographicCRS(crsStr);
+    isGeostat = isGeostationaryCRS(crsStr);
   } catch {
     // No CRS info available — treat as regular curvilinear.
   }
 
   if (isPolarStereo) {
-    const result = await computePolarStereoLatLon2D(
-      props.datasources!,
-      varnameSelector.value
+    return reshapeProjectedLatLon(
+      await computePolarStereoLatLon2D(
+        props.datasources!,
+        varnameSelector.value
+      )
     );
-    // Update aspect ratio to match actual grid dimensions (nx / ny).
-    polarAspectRatio.value = result.nx / result.ny;
-    return {
-      latitudesData: result.latitudes2D,
-      longitudesData: result.longitudes2D,
-      nj: result.ny,
-      ni: result.nx,
-    };
+  }
+
+  if (isGeostat) {
+    return reshapeProjectedLatLon(
+      await computeGeostatLatLon2D(props.datasources!, varnameSelector.value)
+    );
   }
 
   const { latitudes, longitudes } = await getLatLonData(
