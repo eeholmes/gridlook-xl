@@ -119,9 +119,14 @@ function select(entry: TCatalogEntry) {
   emit("select", entry);
 }
 
+function cleanCatalogUrl(url: string): string {
+  const base = url.split("::")[0];
+  return base.replace(/^icechunk\+/, "");
+}
+
 async function copyUrl(url: string) {
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(cleanCatalogUrl(url));
     copyFailedUrl.value = null;
     copiedUrl.value = url;
     setTimeout(() => {
