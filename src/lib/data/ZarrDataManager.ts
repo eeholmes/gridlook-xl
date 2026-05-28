@@ -455,7 +455,17 @@ export class ZarrDataManager {
       varname,
       datasources.zarr_format
     );
-    return datavar.dimensionNames ?? [];
+    if (datavar.dimensionNames) {
+      return datavar.dimensionNames as string[];
+    }
+    // Fall back to the zarr v2 `_ARRAY_DIMENSIONS` attribute, which may be
+    // present on arrays stored in Icechunk repositories that were converted
+    // from zarr v2 without migrating dimension names to the zarr v3
+    // `dimension_names` metadata field.
+    if (Array.isArray(datavar.attrs._ARRAY_DIMENSIONS)) {
+      return datavar.attrs._ARRAY_DIMENSIONS as string[];
+    }
+    return [];
   }
 
   static invalidateCache() {

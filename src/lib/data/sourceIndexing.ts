@@ -49,6 +49,30 @@ async function openDatasetGroup(
   }
 }
 
+/**
+ * Return the effective dimension names for a zarr variable.
+ *
+ * Zarr v3 arrays store dimension names in the `dimension_names` metadata
+ * field (exposed by zarrita as `variable.dimensionNames`).  When the data
+ * was originally stored as zarr v2 and converted to an Icechunk repository
+ * without migrating the `_ARRAY_DIMENSIONS` attribute to `dimension_names`,
+ * zarrita returns `undefined` for `dimensionNames`.  In that case we fall
+ * back to the `_ARRAY_DIMENSIONS` zarr attribute which is the zarr v2
+ * convention for encoding dimension names.
+ */
+function getEffectiveDimensionNames(
+  variable: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+): string[] | undefined {
+  if (Array.isArray(variable.dimensionNames)) {
+    return variable.dimensionNames as string[];
+  }
+  const dimAttr = variable.attrs._ARRAY_DIMENSIONS;
+  if (Array.isArray(dimAttr)) {
+    return dimAttr as string[];
+  }
+  return undefined;
+}
+
 function isValidVariable(
   varname: string,
   shape: number[],
@@ -62,13 +86,6 @@ function isValidVariable(
     "longitude",
   ] as const;
 
-  if (!Array.isArray(dimensions)) {
-    return false;
-  }
-
-  const hasTime = dimensions.includes("time");
-  const shapeValid = hasTime ? shape.length >= 2 : shape.length >= 1;
-
   const hasExcludedName = EXCLUDED_VAR_PATTERNS.some((pattern) =>
     varname.includes(pattern)
   );
@@ -77,15 +94,33 @@ function isValidVariable(
   const leafName = varname.split("/").pop() ?? varname;
   const isLatLon = leafName === "lat" || leafName === "lon";
 
-  return shapeValid && !hasExcludedName && !isLatLon;
+  if (hasExcludedName || isLatLon) {
+    return false;
+  }
+
+  if (!Array.isArray(dimensions)) {
+    // No dimension metadata available (e.g. zarr v3 array without
+    // `dimension_names` and no `_ARRAY_DIMENSIONS` attribute).  Use the
+    // array shape as a heuristic: treat multi-dimensional arrays as data
+    // variables.  1-D arrays are coordinate/auxiliary arrays (lat, lon,
+    // time, …) and are excluded via the name-pattern checks above or by
+    // the shape check here.
+    return shape.length >= 2;
+  }
+
+  const hasTime = dimensions.includes("time");
+  const shapeValid = hasTime ? shape.length >= 2 : shape.length >= 1;
+
+  return shapeValid;
 }
 
 function searchDimensionsAndCoordinates(
   dimensions: Set<string>,
   variable: zarr.Array<zarr.DataType, zarr.AsyncReadable>
 ) {
-  if (Array.isArray(variable.dimensionNames)) {
-    for (const dim of variable.dimensionNames) {
+  const effectiveDims = getEffectiveDimensionNames(variable);
+  if (effectiveDims) {
+    for (const dim of effectiveDims) {
       dimensions.add(dim);
     }
   }
@@ -113,6 +148,7 @@ async function collectArrayEntry(
   });
   searchDimensionsAndCoordinates(dimensions, variable);
 
+  const effectiveDims = getEffectiveDimensionNames(variable);
   // Use the full path (minus leading "/") as the variable name so that nested
   // group paths are preserved (e.g. "0/climate") and the VariableSelector can
   // expose the level/group hierarchy to the user.  dataset="" means the root
@@ -122,14 +158,10 @@ async function collectArrayEntry(
     [varname]: {
       store: src,
       dataset: "",
-      hidden: !isValidVariable(
-        varname,
-        variable.shape,
-        variable.dimensionNames as string[]
-      ),
+      hidden: !isValidVariable(varname, variable.shape, effectiveDims),
       attrs: {
         ...variable.attrs,
-        dimensionNames: variable.dimensionNames,
+        dimensionNames: effectiveDims ?? variable.dimensionNames,
       },
     },
   };
@@ -189,6 +221,7 @@ async function collectNodeListedVariable(
   });
   searchDimensionsAndCoordinates(dimensions, variable);
 
+  const effectiveDims = getEffectiveDimensionNames(variable);
   const absPath = node.path; // e.g. "/group1/group2/varname"
   const normalizedAbsPath = absPath.replace(/^\/+/, "");
   const parentDataset = getParentDatasetPath(absPath);
@@ -202,14 +235,10 @@ async function collectNodeListedVariable(
     [varname]: {
       store: src,
       dataset: datasetPath,
-      hidden: !isValidVariable(
-        varname,
-        variable.shape,
-        variable.dimensionNames as string[]
-      ),
+      hidden: !isValidVariable(varname, variable.shape, effectiveDims),
       attrs: {
         ...variable.attrs,
-        dimensionNames: variable.dimensionNames,
+        dimensionNames: effectiveDims ?? variable.dimensionNames,
       },
     },
   };

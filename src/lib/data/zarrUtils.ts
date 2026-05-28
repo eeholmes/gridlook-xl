@@ -171,13 +171,16 @@ function resolveLatLonFromCoordinates(
   }
 
   if (!latitudeName || !longitudeName) {
-    (datavar.dimensionNames as string[]).forEach((dimName: string) => {
-      if (!latitudeName && isLatitudeName(dimName)) {
-        latitudeName = dimName;
-      } else if (!longitudeName && isLongitudeName(dimName)) {
-        longitudeName = dimName;
-      }
-    });
+    const dimNames = datavar.dimensionNames;
+    if (Array.isArray(dimNames)) {
+      dimNames.forEach((dimName: string) => {
+        if (!latitudeName && isLatitudeName(dimName)) {
+          latitudeName = dimName;
+        } else if (!longitudeName && isLongitudeName(dimName)) {
+          longitudeName = dimName;
+        }
+      });
+    }
   }
   return { latitudeName, longitudeName };
 }
