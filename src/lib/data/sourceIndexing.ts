@@ -161,7 +161,7 @@ async function collectArrayEntry(
       hidden: !isValidVariable(varname, variable.shape, effectiveDims),
       attrs: {
         ...variable.attrs,
-        dimensionNames: effectiveDims ?? variable.dimensionNames,
+        dimensionNames: effectiveDims,
       },
     },
   };
@@ -238,7 +238,7 @@ async function collectNodeListedVariable(
       hidden: !isValidVariable(varname, variable.shape, effectiveDims),
       attrs: {
         ...variable.attrs,
-        dimensionNames: effectiveDims ?? variable.dimensionNames,
+        dimensionNames: effectiveDims,
       },
     },
   };
