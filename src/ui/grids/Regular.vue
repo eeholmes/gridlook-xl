@@ -62,6 +62,7 @@ const { paramDimIndices, paramDimMinBounds, paramDimMaxBounds } =
 
 const {
   getScene,
+  getRenderer,
   redraw,
   makeSnapshot,
   toggleRotate,
@@ -617,6 +618,30 @@ async function makeGeometry() {
   }
 }
 
+/**
+ * Downsample a flat 2-D Float32 data array from (srcWidth × srcHeight) to
+ * (dstWidth × dstHeight) using nearest-neighbour resampling.  NaN values are
+ * preserved so the colormap shader can still mask missing data correctly.
+ * Both dst dimensions must be ≥ 2 (ensured by the caller capping at maxTexSize).
+ */
+function downsampleDataTexture(
+  src: Float32Array,
+  srcWidth: number,
+  srcHeight: number,
+  dstWidth: number,
+  dstHeight: number
+): Float32Array {
+  const dst = new Float32Array(dstWidth * dstHeight);
+  for (let y = 0; y < dstHeight; y++) {
+    const srcY = Math.round((y * (srcHeight - 1)) / (dstHeight - 1));
+    for (let x = 0; x < dstWidth; x++) {
+      const srcX = Math.round((x * (srcWidth - 1)) / (dstWidth - 1));
+      dst[y * dstWidth + x] = src[srcY * srcWidth + srcX];
+    }
+  }
+  return dst;
+}
+
 function getRegularData(
   arr: Float32Array,
   latCount: number,
@@ -633,10 +658,25 @@ function getRegularData(
       }
     }
   }
+
+  // Clamp texture dimensions to the GPU's maxTextureSize.  Mobile GPUs often
+  // cap at 4096 pixels per side; textures larger than that are silently broken
+  // (every texel reads as 0), causing the globe to show only the zero-value
+  // colour.  Nearest-neighbour downsampling keeps the same UV mapping because
+  // the UVs already range over [0, 1] and map correctly at any resolution.
+  const maxTexSize = getRenderer()?.capabilities.maxTextureSize ?? 4096;
+  let texWidth = lonCount;
+  let texHeight = latCount;
+  if (texWidth > maxTexSize || texHeight > maxTexSize) {
+    texWidth = Math.min(lonCount, maxTexSize);
+    texHeight = Math.min(latCount, maxTexSize);
+    data = downsampleDataTexture(data, lonCount, latCount, texWidth, texHeight);
+  }
+
   const texture = new THREE.DataTexture(
     data,
-    lonCount,
-    latCount,
+    texWidth,
+    texHeight,
     THREE.RedFormat,
     THREE.FloatType,
     THREE.UVMapping

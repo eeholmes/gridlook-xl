@@ -78,6 +78,7 @@ export function useSharedGridLogic() {
     box,
     getScene,
     getCamera,
+    getRenderer,
     redraw,
     toggleRotate,
     makeSnapshot,
@@ -373,6 +374,7 @@ export function useSharedGridLogic() {
   return {
     getScene,
     getCamera,
+    getRenderer,
     redraw,
     toggleRotate,
     makeSnapshot,
