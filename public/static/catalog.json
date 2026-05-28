@@ -44,7 +44,7 @@
     },
     {
       "title": "Indian Ocean Physical and Biological Variables",
-      "url": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/IO.zarr/",
+      "url": "https://storage.googleapis.com/nmfs_odp_nwfsc/CB/mind_the_chl_gap/IO.zarr/::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=CHL::dimIndices_time=11922::camerastate=Jc07DsJAEAPQu6RerebrmeEqKAUFRZqET6gQd2ejuHyW7O_02N7LvmzrdLlaN7iGG6xQABpbLzPzsoBSgaRJRyCZA6gUEcxten5u-_21nivUqVRM1UksPUgbdWiEHyF2geag8HHGJDQqpB_ETKCskKIBSTb__g",
       "format": "Zarr v2",
       "access": "direct",
       "convention": null,
