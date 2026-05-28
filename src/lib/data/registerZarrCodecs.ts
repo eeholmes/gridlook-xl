@@ -8,7 +8,9 @@ class Fletcher32Codec {
   }
 
   encode(): never {
-    throw new Error("fletcher32 encode");
+    throw new Error(
+      "Fletcher32 encoding is not supported because this codec is read-only"
+    );
   }
 
   decode(bytes: Uint8Array): Uint8Array {
