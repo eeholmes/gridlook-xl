@@ -622,6 +622,7 @@ async function makeGeometry() {
  * Downsample a flat 2-D Float32 data array from (srcWidth × srcHeight) to
  * (dstWidth × dstHeight) using nearest-neighbour resampling.  NaN values are
  * preserved so the colormap shader can still mask missing data correctly.
+ * Both dst dimensions must be ≥ 2 (ensured by the caller capping at maxTexSize).
  */
 function downsampleDataTexture(
   src: Float32Array,
@@ -632,15 +633,9 @@ function downsampleDataTexture(
 ): Float32Array {
   const dst = new Float32Array(dstWidth * dstHeight);
   for (let y = 0; y < dstHeight; y++) {
-    const srcY = Math.min(
-      Math.round((y * (srcHeight - 1)) / (dstHeight - 1)),
-      srcHeight - 1
-    );
+    const srcY = Math.round((y * (srcHeight - 1)) / (dstHeight - 1));
     for (let x = 0; x < dstWidth; x++) {
-      const srcX = Math.min(
-        Math.round((x * (srcWidth - 1)) / (dstWidth - 1)),
-        srcWidth - 1
-      );
+      const srcX = Math.round((x * (srcWidth - 1)) / (dstWidth - 1));
       dst[y * dstWidth + x] = src[srcY * srcWidth + srcX];
     }
   }
