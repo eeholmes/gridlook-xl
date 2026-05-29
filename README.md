@@ -1,26 +1,33 @@
 # gridlook with IceChunk and grouping
 
-This is a heavily modified fork of [GridLook](https://github.com/d70-t/gridlook). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. You can view any **CORS-enabled**, public Zarr dataset with GridLook. I have modified it to support grouping and multiscale in Zarr v2 and v3, access via Icechunk using [icechunk-js](https://github.com/EarthyScience/icechunk-js), and polar grids. I also added a GitHub Action to serve the gridlook viewer on GitHub Pages.
+This is a heavily modified fork of [GridLook](https://github.com/d70-t/gridlook) developed by the Max-Planck-Institute for Meteorology (MPI-M) and the German Climate Computing Center (DKRZ). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. With GridLook can view any **CORS-enabled**, public Zarr dataset with GridLook if you have the dataset URL. See `/public/static/catalog.json` for lots of example URLs. I have modified GridLook to support grouped and multiscale Zarr v2 and v3, access via Icechunk using [icechunk-js](https://github.com/EarthyScience/icechunk-js), and more grids. I also added a GitHub Action to serve the viewer on GitHub Pages. **Credit**: Cite the GridLook team (MPI-M & DKRZ).
 
 ![](docs/assets/showcase.webp)
 
-## Try out my fork:
+## Try out my modified viewer:
 
 https://eeholmes.github.io/gridlook
 
-## Try on your own PUBLIC Zarr or Icechunk store:
+Try on your own PUBLIC Zarr or Icechunk store:
 
-Put `icechunk+` in front of URI for icechunk stores. See the `public/static/catelog.json` file for examples. No authentication layer and CORS must be enabled.
+See the `public/static/catelog.json` file for examples. No authentication layer and CORS must be enabled.
 
 ```
 https://eeholmes.github.io/gridlook/#<STORE_URI>
 ```
 
-Gridlook can also load catalog JSON files that list multiple datasets. The catalog format and deployment options are documented in [docs/catalogs.md](docs/catalogs.md). A guide to the viewer keyboard, mouse, and touch interaction is available in [docs/Controls.md](docs/Controls.md).
+## Create your own viewer hosted on GitHub Pages
 
-## Examples
+1. For my repo
+2. Set-up GitHub Pages `https://github.com/<username or org>/gridlook/settings/pages` to use GitHub Actions. And your viewer will be live at the url it shows.
 
-Click on the folder icon in the top left. You can sort examples using format, access pattern, layout and grid.
+<img width="935" height="320" alt="image" src="https://github.com/user-attachments/assets/7cbf0169-a38c-4c90-9770-a04e11ee20a4" />
+
+Edit the `public/static/catalog.json` to create your own catalog that you reach by clicking the folder icon in top left. 
+
+## Lots of Zarr Examples
+
+Click on the folder icon in the top left. You can sort examples using format, access pattern, layout and grid. You can copy the URLs too.
 
 ### `format`
 
@@ -65,7 +72,7 @@ Examples include:
 
 ### `grid`
 
-The `grid` field describes the spatial grid topology or projection used by the dataset.
+The `grid` field describes the spatial grid topology or projection used by the dataset. This is mostly guessed at the moment. Don't read too much into this.
 
 Examples:
 - `regular` — standard latitude/longitude rectilinear grid
@@ -99,13 +106,13 @@ Examples:
 
 ## Developers
 
-See `CONTRIBUTING.md` for instructions for running a local version. It is easy.
+See `CONTRIBUTING.md` for instructions for running a local version. It is easy. **Credit**: Cite the GridLook team (MPI-M & DKRZ).
 
 ## CORS & Hosting Notes
 
 To load datasets, you need to ensure [CORS](https://developer.mozilla.org/de/docs/Web/HTTP/Guides/CORS) is enabled on the server. If it is not, you might be out of luck unless you do something like make an icechunk version and host that someplace with CORS enabled (e.g. Source Coop).
 
-### Checking Whether a Dataset URL is CORS Enabled
+**Checking Whether a Dataset URL is CORS Enabled**
 
 Gridlook loads datasets directly from the browser, so the dataset URL must allow Cross-Origin Resource Sharing (CORS). If CORS is not enabled, browsers will block requests even if the dataset itself is publicly accessible.
 
