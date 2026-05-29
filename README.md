@@ -1,6 +1,6 @@
 # gridlook with IceChunk and grouping
 
-This is a heavily modified fork of [GridLook](https://github.com/d70-t/gridlook) developed by the Max-Planck-Institute for Meteorology (MPI-M) and the German Climate Computing Center (DKRZ). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. With GridLook can view any **CORS-enabled**, public Zarr dataset with GridLook if you have the dataset URL. See `/public/static/catalog.json` for lots of example URLs. I have modified GridLook to support grouped and multiscale Zarr v2 and v3, access via Icechunk using [icechunk-js](https://github.com/EarthyScience/icechunk-js), and more grids. I also added a GitHub Action to serve the viewer on GitHub Pages. **Credit**: Cite the GridLook team (MPI-M & DKRZ).
+This is a heavily modified and vibe-coded fork of [GridLook](https://github.com/d70-t/gridlook), developed by the Max-Planck-Institute for Meteorology (MPI-M) and the German Climate Computing Center (DKRZ). GridLook is a WebGL-based viewer for cloud-hosted Zarr datasets. With GridLook can view any **CORS-enabled**, public Zarr dataset with GridLook if you have the dataset URL. See `/public/static/catalog.json` for lots of example URLs. I have modified GridLook to support grouped and multiscale Zarr v2 and v3, access via Icechunk using [icechunk-js](https://github.com/EarthyScience/icechunk-js), and more grids. I also added a GitHub Action to serve the viewer on GitHub Pages. **Credit**: Cite the GridLook team (MPI-M & DKRZ).
 
 ![](docs/assets/showcase.webp)
 
