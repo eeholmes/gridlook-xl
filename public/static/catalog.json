@@ -681,6 +681,16 @@
       "layout": "simple",
       "grid": "healpix",
       "crs": "EPSG:4326"
+    },
+    {
+      "title": "",
+      "url": "https://data.source.coop/bkr/dmi/alaska_hrrr.icechunk::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=10_metre_u_wind_component_at_10.0m::dimIndices_time=0::dimIndices_step=0::camerastate=Jcw5DsJAEETRuzgej7q7euUqiICAwInNYiLE3RnkoJL60vtM9-217Mu2TqfznB0I8gwhUStom6UzFRjlmZXkkY3RzdxLTMnK_NKmx_u6357rwVAXIQqgSj3VTIdDnYMhKVzKgI30Py2rRFyRNFbcqIdFOMyZODQG__0B::dimIndices_level=0::projection=nearside_perspective",
+      "format": "Zarr v3",
+      "access": "icechunk",
+      "convention": null,
+      "layout": "simple",
+      "grid": "polar_stereographic",
+      "crs": "EPSG:3413"        
     }
   ]
 }
