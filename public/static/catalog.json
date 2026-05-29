@@ -501,6 +501,186 @@
       "layout": "simple",
       "grid": "regular",
       "crs": "EPSG:4326"
+    },
+        {
+      "title": "HadGEM3-GC5E-HH Historical Monthly Atmosphere",
+      "url": "https://eerie.cloud.dkrz.de/datasets/HadGEM3-GC5E-HH.historical.v20250409.gr1.Amon/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "CORDEX-CMIP6 EUR-12 CNRM-ESM2-1 Historical Daily",
+      "url": "https://eerie.cloud.dkrz.de/datasets/cordex-cmip6.DD.EUR-12.CLMcom-BTU.CNRM-ESM2-1.historical.r1i1p1f2.ICON-CLM-202407-1-1.v1-r1.day/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular_rotated",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "CORDEX-CMIP6 EUR-12 MPI-ESM1-2-HR Historical Daily",
+      "url": "https://eerie.cloud.dkrz.de/datasets/cordex-cmip6.DD.EUR-12.CLMcom-DWD.MPI-ESM1-2-HR.historical.r1i1p1f1.ICON-CLM-202407-1-1.v1-r1.day/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular_rotated",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "CORDEX-CMIP6 EUR-12 EC-Earth3-Veg SSP1-2.6 Daily",
+      "url": "https://eerie.cloud.dkrz.de/datasets/cordex-cmip6.DD.EUR-12.CLMcom-GERICS.EC-Earth3-Veg.ssp126.r1i1p1f1.ICON-CLM-202407-1-1.v1-r1.day/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular_rotated",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "COSMO-REA Hourly Point Atmosphere",
+      "url": "https://eerie.cloud.dkrz.de/datasets/cosmo-rea-1hrPt_atmos/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular_rotated",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "ERA5-DKRZ Surface Analysis Hourly",
+      "url": "https://eerie.cloud.dkrz.de/datasets/era5-dkrz.surface_analysis_hourly/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "irregular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "ERA5-Land-DKRZ Surface Analysis Hourly",
+      "url": "https://eerie.cloud.dkrz.de/datasets/era5-land-dkrz.surface_analysis_hourly/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "irregular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "Mild Error - ICON-EPOC Control 1990 Atmosphere Daily Mean",
+      "url": "https://eerie.cloud.dkrz.de/datasets/icon-epoc.control-1990.v20250325.atmos.native.2d_daily_mean/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "triangular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "Mild Error - ICON-EPOC Control 1990 Ocean Daily Mean",
+      "url": "https://eerie.cloud.dkrz.de/datasets/icon-epoc.control-1990.v20250325.ocean.native.2d_daily_mean/stac::varname=Wind_Speed_10m",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "triangular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "ICON-ESM-ER High-Resolution Future SSP2-4.5 Atmosphere Hourly",
+      "url": "https://eerie.cloud.dkrz.de/datasets/icon-esm-er.highres-future-ssp245.v20240618.atmos.native.2d_1h_inst/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "triangular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "IFS-AMIP TCo1279 Historical Atmosphere Daily",
+      "url": "https://eerie.cloud.dkrz.de/datasets/ifs-amip-tco1279.hist.v20240901.atmos.gr025.2D_24h/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "irregular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "IFS-AMIP TCo2559 Historical Atmosphere Hourly",
+      "url": "https://eerie.cloud.dkrz.de/datasets/ifs-amip-tco2559.hist.v20240901.atmos.gr025.2D_1h/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "irregular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "Mild Error - IFS-FESOM2-SR Historical 1950 Ocean Daily Mean",
+      "url": "https://eerie.cloud.dkrz.de/datasets/ifs-fesom2-sr.hist-1950.v20240304.ocean.gr025.2D_daily_avg_1950-2014/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "IFS-NEMO-ER High-Resolution Future SSP2-4.5 Atmosphere Monthly",
+      "url": "https://eerie.cloud.dkrz.de/datasets/ifs-nemo-er.highres-future-ssp245.v20250516.atmos.gr025.Amon/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "NextGEMS IFS 2.8 / FESOM 5 Production Ocean Daily HEALPix",
+      "url": "https://eerie.cloud.dkrz.de/datasets/nextgems.IFS_2.8-FESOM_5-production.2D_daily_healpix128_ocean/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "healpix",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "NextGEMS IFS 2.8 / FESOM 5 Production Deep-Off Ocean Daily HEALPix",
+      "url": "https://eerie.cloud.dkrz.de/datasets/nextgems.IFS_2.8-FESOM_5-production-deep-off.2D_daily_healpix128_ocean/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "healpix",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "ORCESTRA 1250 m 2D HEALPix",
+      "url": "https://eerie.cloud.dkrz.de/datasets/orcestra_1250m_2d_hpz12/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "healpix",
+      "crs": "EPSG:4326"
+    },
+    {
+      "title": "ORCESTRA 1250 m 3D HEALPix",
+      "url": "https://eerie.cloud.dkrz.de/datasets/orcestra_1250m_3d_hpz12/stac",
+      "format": "Zarr v2",
+      "access": "direct",
+      "convention": null,
+      "layout": "simple",
+      "grid": "healpix",
+      "crs": "EPSG:4326"
     }
   ]
 }
