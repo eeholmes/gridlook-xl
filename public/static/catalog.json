@@ -494,7 +494,7 @@
     },
     {
       "title": "NASA Risk Analysis and Solutions Innovators (RASI)",
-      "url": "https://nasa-waterinsight.s3.us-west-2.amazonaws.com/virtual-zarr-store/icechunk/RASI/HISTORICAL/::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=AvgSurfT_Percentiles::dimIndices_time=0::dimIndices_percentile=0::camerastate=JYw5DsJQEMXukvrna97sw1VQCgqKNAlLqBB3JxDJheXC7-G2PudtXpfhdB6la7CVhDqrGyPaCOkoSWQm77Kn7OooZGhADJjacH9dtutjOTbUNZmNqMoEf9pInfYnAe5JUcnlvwgwhEXBpaLG1qinu6V4lFekhUyfLw::maskmode=sea::maskusetexture=false::projection=nearside_perspective"
+      "url": "https://nasa-waterinsight.s3.us-west-2.amazonaws.com/virtual-zarr-store/icechunk/RASI/HISTORICAL/::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=AvgSurfT_Percentiles::dimIndices_time=0::dimIndices_percentile=0::camerastate=JYw5DsJQEMXukvrna97sw1VQCgqKNAlLqBB3JxDJheXC7-G2PudtXpfhdB6la7CVhDqrGyPaCOkoSWQm77Kn7OooZGhADJjacH9dtutjOTbUNZmNqMoEf9pInfYnAe5JUcnlvwgwhEXBpaLG1qinu6V4lFekhUyfLw::maskmode=sea::maskusetexture=false::projection=nearside_perspective",
       "format": "Zarr v3",
       "access": "icechunk",
       "convention": null,
