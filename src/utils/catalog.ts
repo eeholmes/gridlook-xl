@@ -18,6 +18,13 @@ export type TCatalog = {
   datasets: TCatalogEntry[];
 };
 
+export function findCatalogEntryByUrl(
+  catalog: TCatalog | undefined,
+  url: string
+): TCatalogEntry | undefined {
+  return catalog?.datasets.find((entry) => entry.url === url);
+}
+
 export function isCatalog(data: unknown): data is TCatalog {
   return (
     typeof data === "object" &&

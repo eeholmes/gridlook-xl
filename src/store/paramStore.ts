@@ -33,6 +33,7 @@ export const useUrlParameterStore = defineStore("urlParams", {
       paramProjectionCenterLon: undefined as string | undefined,
       paramGridType: undefined as string | undefined,
       paramCatalog: undefined as string | undefined,
+      paramCrs: undefined as string | undefined,
     };
   },
   actions: {
@@ -77,4 +78,5 @@ export const STORE_PARAM_MAPPING = {
   boundhigh: "paramBoundHigh",
   gridtype: "paramGridType",
   catalog: "paramCatalog",
+  crs: "paramCrs",
 } as const;

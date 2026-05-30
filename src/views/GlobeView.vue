@@ -270,10 +270,11 @@ const updateSrc = async () => {
   // works. If both fail, we log the last error which is from the json-index.
   // This leads to confusing error messages if the zarr source is supposed to
   // work but fails for some reason.
-  const indices = await Promise.allSettled([
-    indexFromZarr(src),
-    indexFromIndex(src),
-  ]);
+  const indexPromises = [indexFromZarr(src)];
+  if (!src.startsWith("icechunk+")) {
+    indexPromises.push(indexFromIndex(src));
+  }
+  const indices = await Promise.allSettled(indexPromises);
   if (requestId !== sourceRequestId || src !== props.src) {
     return;
   }

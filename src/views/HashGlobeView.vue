@@ -11,6 +11,7 @@ import {
 } from "@/store/paramStore.ts";
 import { useGlobeControlStore } from "@/store/store.ts";
 import { isDisplayMode, isPresenterActive } from "@/store/usePresenterSync.ts";
+import { findCatalogEntryByUrl, fetchCatalog } from "@/utils/catalog.ts";
 import type { TURLParameterValues } from "@/utils/urlParams.ts";
 
 type TParams = Partial<Record<TURLParameterValues, string>>;
@@ -22,13 +23,16 @@ const DEFAULT_CATALOG = "static/catalog.json";
 
 const defaultSrc = ref(DEFAULT_DATASET);
 const src = ref(DEFAULT_DATASET);
+const isReady = ref(false);
 const params: Ref<TParams> = ref({});
 
 const store = useGlobeControlStore();
 
 const urlParameterStore = useUrlParameterStore();
 
-const onHashChange = () => {
+/* eslint-disable-next-line max-lines-per-function */
+const onHashChange = async () => {
+  isReady.value = false;
   if (location.hash.length > 1) {
     if (isDisplayMode.value || isPresenterActive.value) {
       urlParameterStore.resetExceptCamera();
@@ -71,21 +75,55 @@ const onHashChange = () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       urlParameterStore[paramProperty] = value as any;
     }
-    src.value = resource || defaultSrc.value;
+    const nextSrc = resource || defaultSrc.value;
     store.catalogUrl = params.value.catalog || DEFAULT_CATALOG;
+    store.catalogData = undefined;
+
+    if (store.catalogUrl) {
+      try {
+        const catalog = await fetchCatalog(store.catalogUrl);
+        if (catalog) {
+          store.catalogData = catalog;
+          if (!urlParameterStore.paramCrs) {
+            urlParameterStore.paramCrs = findCatalogEntryByUrl(
+              catalog,
+              nextSrc
+            )?.crs;
+          }
+        }
+      } catch {
+        // Ignore catalog fetch failures and continue with dataset loading.
+      }
+    }
+    src.value = nextSrc;
   } else {
     store.catalogUrl = DEFAULT_CATALOG;
+    store.catalogData = undefined;
     src.value = defaultSrc.value;
   }
+  isReady.value = true;
 };
 
-useEventListener(window, "hashchange", onHashChange);
+useEventListener(window, "hashchange", () => {
+  void onHashChange();
+});
 
 onBeforeMount(() => {
-  onHashChange();
+  void onHashChange();
 });
 </script>
 
 <template>
-  <GlobeView :src="src" />
+  <GlobeView v-if="isReady" :src="src" />
+  <div v-else class="loader hash-view-loader" />
 </template>
+
+<style scoped>
+.hash-view-loader {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  height: 40px;
+  width: 40px;
+}
+</style>
