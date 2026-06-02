@@ -473,8 +473,17 @@ function initializeArrays(jEnd: number, jStart: number, ni: number) {
   return { positionValues, dataValues, latLonValues, indices };
 }
 
+// Treat rows spanning most of the world as global, but leave room for
+// regional grids that legitimately cross the seam without wrapping.
+// 300° is a pragmatic cutoff: it keeps regional grids narrower than 300°
+// on the open-grid path while treating 300°+ rows as effectively global.
+const GLOBAL_LONGITUDE_THRESHOLD_DEGREES = 300;
+
 function normalizeLongitudeDelta(delta: number): number {
-  return ((((delta + 180) % 360) + 360) % 360) - 180;
+  // Normalize to the shortest signed longitude step in the range [-180, 180].
+  const shiftedDelta = delta + 180;
+  const wrappedDelta = ((shiftedDelta % 360) + 360) % 360;
+  return wrappedDelta - 180;
 }
 
 function isCurvilinearLongitudeGlobal(
@@ -482,7 +491,8 @@ function isCurvilinearLongitudeGlobal(
   nj: number,
   ni: number
 ): boolean {
-  if (nj < 1 || ni < 2) {
+  // At least one row and one column are needed to measure longitude coverage.
+  if (nj === 0 || ni === 0) {
     return false;
   }
 
@@ -507,7 +517,7 @@ function isCurvilinearLongitudeGlobal(
     maxRowCoverage = Math.max(maxRowCoverage, rowCoverage);
   }
 
-  return maxRowCoverage >= 300;
+  return maxRowCoverage >= GLOBAL_LONGITUDE_THRESHOLD_DEGREES;
 }
 
 function getTraversalColumnIndex(
@@ -516,6 +526,53 @@ function getTraversalColumnIndex(
   flipLongitude: boolean
 ): number {
   return flipLongitude ? ni - 1 - step : step;
+}
+
+function getCurvilinearCellColumns(ni: number, wrapLongitude: boolean): number {
+  // Open grids use one fewer cell column so the last column does not wrap
+  // back to the first one across the seam.
+  return wrapLongitude ? ni : ni - 1;
+}
+
+function getNextTraversalColumnIndex(
+  step: number,
+  ni: number,
+  flipLongitude: boolean,
+  wrapLongitude: boolean
+): number {
+  // Wrapped grids close the ring by sending the final step back to the first
+  // traversal column; open grids simply advance one column at a time.
+  const nextStep = wrapLongitude ? (step + 1) % ni : step + 1;
+  return getTraversalColumnIndex(nextStep, ni, flipLongitude);
+}
+
+function getCurvilinearCellCorners(
+  j: number,
+  step: number,
+  ni: number,
+  flipLongitude: boolean,
+  wrapLongitude: boolean,
+  latitudes: Float64Array,
+  longitudes: Float64Array
+) {
+  const nextColumn = getNextTraversalColumnIndex(
+    step,
+    ni,
+    flipLongitude,
+    wrapLongitude
+  );
+  const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
+    j,
+    getTraversalColumnIndex(step, ni, flipLongitude),
+    nextColumn,
+    ni
+  );
+  const { latPoints, lonPoints } = extractCellCorners(
+    { idx00, idx01, idx10, idx11 },
+    latitudes,
+    longitudes
+  );
+  return { idx00, latPoints, lonPoints };
 }
 
 function appendCurvilinearCell(
@@ -534,18 +591,12 @@ function appendCurvilinearCell(
   cellIndex: number,
   idxOffset: number
 ) {
-  const currentColumn = getTraversalColumnIndex(step, ni, flipLongitude);
-  const nextColumn = wrapLongitude
-    ? getTraversalColumnIndex((step + 1) % ni, ni, flipLongitude)
-    : getTraversalColumnIndex(step + 1, ni, flipLongitude);
-  const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
+  const { idx00, latPoints, lonPoints } = getCurvilinearCellCorners(
     j,
-    currentColumn,
-    nextColumn,
-    ni
-  );
-  const { latPoints, lonPoints } = extractCellCorners(
-    { idx00, idx01, idx10, idx11 },
+    step,
+    ni,
+    flipLongitude,
+    wrapLongitude,
     latitudes,
     longitudes
   );
@@ -560,12 +611,18 @@ function appendCurvilinearCell(
     positionOffset,
     cellIndex
   );
-  const v = cellIndex * 4;
   return {
     positionOffset: nextPositionOffset,
     idxOffset: idxOffset + 6,
     cellIndex: cellIndex + 1,
-    indices: [v, v + 1, v + 2, v, v + 2, v + 3],
+    indices: [
+      cellIndex * 4,
+      cellIndex * 4 + 1,
+      cellIndex * 4 + 2,
+      cellIndex * 4,
+      cellIndex * 4 + 2,
+      cellIndex * 4 + 3,
+    ],
   };
 }
 
@@ -644,7 +701,7 @@ function buildBatchGeometryData(
   flipLongitude: boolean,
   wrapLongitude: boolean
 ) {
-  const cellColumns = wrapLongitude ? ni : ni - 1;
+  const cellColumns = getCurvilinearCellColumns(ni, wrapLongitude);
   const { positionValues, dataValues, latLonValues, indices } =
     initializeArrays(jEnd, jStart, cellColumns);
 
@@ -689,8 +746,9 @@ function buildCurvilinearGeometry(
   flipLongitude: boolean = false, // Whether to flip longitude ordering
   wrapLongitude: boolean = false
 ) {
-  const cellColumns = wrapLongitude ? ni : ni - 1;
-  if (nj < 2 || cellColumns < 1) {
+  // Geometry needs at least two rows and two columns to form quads; without
+  // that, there are no cells to render.
+  if (nj < 2 || ni < 2) {
     cleanupMeshes(0);
     return;
   }
@@ -789,14 +847,19 @@ function buildCurvilinearHoverSamples(
   wrapLongitude: boolean
 ) {
   const samples: { lat: number; lon: number; value: number }[] = [];
-  const cellColumns = wrapLongitude ? ni : ni - 1;
+  const cellColumns = getCurvilinearCellColumns(ni, wrapLongitude);
 
+  // With the open-grid cell count, the final step stops at ni - 2, so the
+  // next column index remains the last valid longitude column.
   for (let j = 0; j < nj - 1; j++) {
     for (let i = 0; i < cellColumns; i++) {
       const currentColumn = getTraversalColumnIndex(i, ni, flipLongitude);
-      const nextColumn = wrapLongitude
-        ? getTraversalColumnIndex((i + 1) % ni, ni, flipLongitude)
-        : getTraversalColumnIndex(i + 1, ni, flipLongitude);
+      const nextColumn = getNextTraversalColumnIndex(
+        i,
+        ni,
+        flipLongitude,
+        wrapLongitude
+      );
       const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
         j,
         currentColumn,
