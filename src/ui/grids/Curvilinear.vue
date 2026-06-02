@@ -296,6 +296,11 @@ async function getGrid(
     nj,
     ni
   );
+  const shouldWrapLongitude = isCurvilinearLongitudeGlobal(
+    longitudesData,
+    nj,
+    ni
+  );
 
   buildCurvilinearGeometry(
     latitudesData,
@@ -303,10 +308,18 @@ async function getGrid(
     data,
     nj,
     ni,
-    shouldFlipLongitude
+    shouldFlipLongitude,
+    shouldWrapLongitude
   );
 
-  return { latitudesData, longitudesData, nj, ni, shouldFlipLongitude };
+  return {
+    latitudesData,
+    longitudesData,
+    nj,
+    ni,
+    shouldFlipLongitude,
+    shouldWrapLongitude,
+  };
 }
 
 function detectLongitudeFlip(
@@ -376,25 +389,8 @@ function cleanupMeshes(totalBatches: number) {
   meshes.length = 0;
 }
 
-function getNextColumnIndex(
-  i: number,
-  ni: number,
-  flipLongitude: boolean
-): number {
-  if (flipLongitude) {
-    return i === 0 ? ni - 1 : i - 1;
-  }
-  return (i + 1) % ni;
-}
-
 // Calculate the four corner indices for a grid cell
-function getCellCornerIndices(
-  j: number,
-  i: number,
-  ni: number,
-  flipLongitude: boolean
-) {
-  const iNext = getNextColumnIndex(i, ni, flipLongitude);
+function getCellCornerIndices(j: number, i: number, iNext: number, ni: number) {
   return {
     idx00: j * ni + i,
     idx01: j * ni + iNext,
@@ -477,6 +473,159 @@ function initializeArrays(jEnd: number, jStart: number, ni: number) {
   return { positionValues, dataValues, latLonValues, indices };
 }
 
+// Treat rows spanning most of the world as global, but leave room for
+// regional grids that legitimately cross the seam without wrapping.
+// 300° is a pragmatic cutoff: it keeps regional grids narrower than 300°
+// on the open-grid path while treating 300°+ rows as effectively global.
+const GLOBAL_LONGITUDE_THRESHOLD_DEGREES = 300;
+
+function normalizeLongitudeDelta(delta: number): number {
+  // Normalize to the shortest signed longitude step in the range [-180, 180].
+  const shiftedDelta = delta + 180;
+  const wrappedDelta = ((shiftedDelta % 360) + 360) % 360;
+  return wrappedDelta - 180;
+}
+
+function isCurvilinearLongitudeGlobal(
+  longitudes: Float64Array,
+  nj: number,
+  ni: number
+): boolean {
+  // At least one row and one column are needed to measure longitude coverage.
+  if (nj === 0 || ni === 0) {
+    return false;
+  }
+
+  let maxRowCoverage = 0;
+  for (let j = 0; j < nj; j++) {
+    let rowCoverage = 0;
+    let previousLon: number | undefined;
+
+    for (let i = 0; i < ni; i++) {
+      const lon = longitudes[j * ni + i];
+      if (!Number.isFinite(lon)) {
+        previousLon = undefined;
+        continue;
+      }
+
+      if (previousLon !== undefined) {
+        rowCoverage += Math.abs(normalizeLongitudeDelta(lon - previousLon));
+      }
+      previousLon = lon;
+    }
+
+    maxRowCoverage = Math.max(maxRowCoverage, rowCoverage);
+  }
+
+  return maxRowCoverage >= GLOBAL_LONGITUDE_THRESHOLD_DEGREES;
+}
+
+function getTraversalColumnIndex(
+  step: number,
+  ni: number,
+  flipLongitude: boolean
+): number {
+  return flipLongitude ? ni - 1 - step : step;
+}
+
+function getCurvilinearCellColumns(ni: number, wrapLongitude: boolean): number {
+  // Open grids use one fewer cell column so the last column does not wrap
+  // back to the first one across the seam.
+  return wrapLongitude ? ni : ni - 1;
+}
+
+function getNextTraversalColumnIndex(
+  step: number,
+  ni: number,
+  flipLongitude: boolean,
+  wrapLongitude: boolean
+): number {
+  // Wrapped grids close the ring by sending the final step back to the first
+  // traversal column; open grids simply advance one column at a time.
+  const nextStep = wrapLongitude ? (step + 1) % ni : step + 1;
+  return getTraversalColumnIndex(nextStep, ni, flipLongitude);
+}
+
+function getCurvilinearCellCorners(
+  j: number,
+  step: number,
+  ni: number,
+  flipLongitude: boolean,
+  wrapLongitude: boolean,
+  latitudes: Float64Array,
+  longitudes: Float64Array
+) {
+  const nextColumn = getNextTraversalColumnIndex(
+    step,
+    ni,
+    flipLongitude,
+    wrapLongitude
+  );
+  const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
+    j,
+    getTraversalColumnIndex(step, ni, flipLongitude),
+    nextColumn,
+    ni
+  );
+  const { latPoints, lonPoints } = extractCellCorners(
+    { idx00, idx01, idx10, idx11 },
+    latitudes,
+    longitudes
+  );
+  return { idx00, latPoints, lonPoints };
+}
+
+function appendCurvilinearCell(
+  j: number,
+  step: number,
+  ni: number,
+  flipLongitude: boolean,
+  wrapLongitude: boolean,
+  latitudes: Float64Array,
+  longitudes: Float64Array,
+  data: Float32Array,
+  positionValues: Float32Array,
+  dataValues: Float32Array,
+  latLonValues: Float32Array,
+  positionOffset: number,
+  cellIndex: number,
+  idxOffset: number
+) {
+  const { idx00, latPoints, lonPoints } = getCurvilinearCellCorners(
+    j,
+    step,
+    ni,
+    flipLongitude,
+    wrapLongitude,
+    latitudes,
+    longitudes
+  );
+  const nextPositionOffset = fillCellPositionAndData(
+    latPoints,
+    lonPoints,
+    data,
+    idx00,
+    positionValues,
+    dataValues,
+    latLonValues,
+    positionOffset,
+    cellIndex
+  );
+  return {
+    positionOffset: nextPositionOffset,
+    idxOffset: idxOffset + 6,
+    cellIndex: cellIndex + 1,
+    indices: [
+      cellIndex * 4,
+      cellIndex * 4 + 1,
+      cellIndex * 4 + 2,
+      cellIndex * 4,
+      cellIndex * 4 + 2,
+      cellIndex * 4 + 3,
+    ],
+  };
+}
+
 // Project all 4 vertices of a cell and update offsets
 function projectCellVertices(
   latPoints: number[],
@@ -549,43 +698,39 @@ function buildBatchGeometryData(
   jStart: number,
   jEnd: number,
   ni: number,
-  flipLongitude: boolean
+  flipLongitude: boolean,
+  wrapLongitude: boolean
 ) {
+  const cellColumns = getCurvilinearCellColumns(ni, wrapLongitude);
   const { positionValues, dataValues, latLonValues, indices } =
-    initializeArrays(jEnd, jStart, ni);
+    initializeArrays(jEnd, jStart, cellColumns);
 
   let positionOffset = 0;
   let idxOffset = 0;
   let cellIndex = 0;
 
   for (let j = jStart; j < jEnd; j++) {
-    for (let i = 0; i < ni; i++) {
-      const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
+    for (let i = 0; i < cellColumns; i++) {
+      const cell = appendCurvilinearCell(
         j,
         i,
         ni,
-        flipLongitude
-      );
-      const { latPoints, lonPoints } = extractCellCorners(
-        { idx00, idx01, idx10, idx11 },
+        flipLongitude,
+        wrapLongitude,
         latitudes,
-        longitudes
-      );
-      positionOffset = fillCellPositionAndData(
-        latPoints,
-        lonPoints,
+        longitudes,
         data,
-        idx00,
         positionValues,
         dataValues,
         latLonValues,
         positionOffset,
-        cellIndex
+        cellIndex,
+        idxOffset
       );
-      const v = cellIndex * 4;
-      indices.set([v, v + 1, v + 2, v, v + 2, v + 3], idxOffset);
-      idxOffset += 6;
-      cellIndex++;
+      positionOffset = cell.positionOffset;
+      indices.set(cell.indices, idxOffset);
+      idxOffset = cell.idxOffset;
+      cellIndex = cell.cellIndex;
     }
   }
 
@@ -598,8 +743,16 @@ function buildCurvilinearGeometry(
   data: Float32Array, // 2D array flattened: data values at each (j,i) grid point
   nj: number, // Number of rows in the grid (j dimension)
   ni: number, // Number of columns in the grid (i dimension)
-  flipLongitude: boolean = false // Whether to flip longitude ordering
+  flipLongitude: boolean = false, // Whether to flip longitude ordering
+  wrapLongitude: boolean = false
 ) {
+  // Geometry needs at least two rows and two columns to form quads; without
+  // that, there are no cells to render.
+  if (nj < 2 || ni < 2) {
+    cleanupMeshes(0);
+    return;
+  }
+
   const totalBatches = Math.ceil((nj - 1) / BATCH_SIZE);
   cleanupMeshes(totalBatches);
 
@@ -614,7 +767,8 @@ function buildCurvilinearGeometry(
       jStart,
       jEnd,
       ni,
-      flipLongitude
+      flipLongitude,
+      wrapLongitude
     );
     updateBatchMesh(batchIndex, geometry, meshes);
   }
@@ -689,17 +843,28 @@ function buildCurvilinearHoverSamples(
   longitudes: Float64Array,
   nj: number,
   ni: number,
-  flipLongitude: boolean
+  flipLongitude: boolean,
+  wrapLongitude: boolean
 ) {
   const samples: { lat: number; lon: number; value: number }[] = [];
+  const cellColumns = getCurvilinearCellColumns(ni, wrapLongitude);
 
+  // With the open-grid cell count, the final step stops at ni - 2, so the
+  // next column index remains the last valid longitude column.
   for (let j = 0; j < nj - 1; j++) {
-    for (let i = 0; i < ni; i++) {
-      const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
-        j,
+    for (let i = 0; i < cellColumns; i++) {
+      const currentColumn = getTraversalColumnIndex(i, ni, flipLongitude);
+      const nextColumn = getNextTraversalColumnIndex(
         i,
         ni,
-        flipLongitude
+        flipLongitude,
+        wrapLongitude
+      );
+      const { idx00, idx01, idx10, idx11 } = getCellCornerIndices(
+        j,
+        currentColumn,
+        nextColumn,
+        ni
       );
       // Keep hover sampling colocated with rendered quads by using a cell center.
       const { lat, lon } = getCellCenter(
@@ -729,6 +894,7 @@ function setHoverData(
   nj: number,
   ni: number,
   flipLongitude: boolean,
+  wrapLongitude: boolean,
   fillValue: number,
   missingValue: number
 ) {
@@ -738,7 +904,8 @@ function setHoverData(
     longitudes,
     nj,
     ni,
-    flipLongitude
+    flipLongitude,
+    wrapLongitude
   );
 
   setHoverLookupFromIndex(
@@ -754,8 +921,14 @@ async function renderGridAndHover(
   fillValue: number,
   missingValue: number
 ) {
-  const { latitudesData, longitudesData, nj, ni, shouldFlipLongitude } =
-    await getGrid(datavar, rawData);
+  const {
+    latitudesData,
+    longitudesData,
+    nj,
+    ni,
+    shouldFlipLongitude,
+    shouldWrapLongitude,
+  } = await getGrid(datavar, rawData);
   setHoverData(
     rawData,
     latitudesData,
@@ -763,6 +936,7 @@ async function renderGridAndHover(
     nj,
     ni,
     shouldFlipLongitude,
+    shouldWrapLongitude,
     fillValue,
     missingValue
   );
