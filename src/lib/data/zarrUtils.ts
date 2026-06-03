@@ -259,9 +259,8 @@ function applyScaleFactor(
 }
 
 function coordinateUnitsToMetresFactor(units?: unknown) {
-  const normalized = String(units ?? "")
-    .trim()
-    .toLowerCase();
+  const normalized =
+    typeof units === "string" ? units.trim().toLowerCase() : "";
   if (
     normalized === "km" ||
     normalized === "kilometer" ||

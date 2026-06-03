@@ -266,7 +266,11 @@ async function resolveLatLon2D(
         nj,
         ni,
       };
-    } catch {
+    } catch (error) {
+      logError(
+        error,
+        "Could not use provided auxiliary lat/lon coordinates; computing polar stereographic coordinates instead"
+      );
       const result = await computePolarStereoLatLon2D(
         props.datasources!,
         varnameSelector.value
