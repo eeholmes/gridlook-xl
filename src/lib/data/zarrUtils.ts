@@ -258,7 +258,13 @@ function applyScaleFactor(
   }
 }
 
-function coordinateUnitsToMetresFactor(units?: unknown) {
+/**
+ * Convert coordinate unit labels to a multiplier that scales values to metres.
+ *
+ * Unscaled meter-based units return 1, while kilometre-based units return 1000.
+ * Unknown units fall back to 1 so existing metre-based grids continue to work.
+ */
+function coordinateUnitsToMetersFactor(units?: unknown) {
   const normalized =
     typeof units === "string" ? units.trim().toLowerCase() : "";
   if (
@@ -269,6 +275,15 @@ function coordinateUnitsToMetresFactor(units?: unknown) {
     normalized === "kilometres"
   ) {
     return 1000;
+  }
+  if (
+    normalized === "m" ||
+    normalized === "meter" ||
+    normalized === "meters" ||
+    normalized === "metre" ||
+    normalized === "metres"
+  ) {
+    return 1;
   }
   return 1;
 }
@@ -581,8 +596,8 @@ export async function getXYCoordinatesAsLatLon(
 
   const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
   const crsWkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
-  const xScale = coordinateUnitsToMetresFactor(xArray.attrs?.units);
-  const yScale = coordinateUnitsToMetresFactor(yArray.attrs?.units);
+  const xScale = coordinateUnitsToMetersFactor(xArray.attrs?.units);
+  const yScale = coordinateUnitsToMetersFactor(yArray.attrs?.units);
 
   if (isWebMercatorCRS(crsWkt)) {
     const xRaw = castDataVarToFloat32(xData.data);
@@ -814,8 +829,8 @@ export async function computePolarStereoLatLon2D(
   const yRaw = castDataVarToFloat32(yData.data); // 1-D, length ny
   const nx = xRaw.length;
   const ny = yRaw.length;
-  const xScale = coordinateUnitsToMetresFactor(xArray.attrs?.units);
-  const yScale = coordinateUnitsToMetresFactor(yArray.attrs?.units);
+  const xScale = coordinateUnitsToMetersFactor(xArray.attrs?.units);
+  const yScale = coordinateUnitsToMetersFactor(yArray.attrs?.units);
 
   const latitudes2D = new Float64Array(ny * nx);
   const longitudes2D = new Float64Array(ny * nx);
