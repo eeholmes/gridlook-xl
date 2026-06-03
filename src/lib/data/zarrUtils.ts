@@ -267,6 +267,7 @@ function applyScaleFactor(
 function coordinateUnitsToMetersFactor(units?: unknown) {
   const normalized =
     typeof units === "string" ? units.trim().toLowerCase() : "";
+  const defaultUnitScale = 1;
   if (
     normalized === "km" ||
     normalized === "kilometer" ||
@@ -278,7 +279,7 @@ function coordinateUnitsToMetersFactor(units?: unknown) {
   }
   // Metre-based and unknown units both default to no scaling for backward
   // compatibility with existing projected grids.
-  return 1;
+  return defaultUnitScale;
 }
 
 async function fetchLatLonVariables(

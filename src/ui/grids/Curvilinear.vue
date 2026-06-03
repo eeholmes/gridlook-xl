@@ -260,7 +260,7 @@ async function resolveLatLon2D(
       );
       if (!longitudes) {
         throw new Error(
-          "Provided auxiliary longitude coordinates were not available."
+          "Provided auxiliary latitude/longitude coordinates were not available."
         );
       }
       const [nj, ni] = latitudes.shape;
