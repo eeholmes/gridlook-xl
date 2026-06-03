@@ -276,15 +276,8 @@ function coordinateUnitsToMetersFactor(units?: unknown) {
   ) {
     return 1000;
   }
-  if (
-    normalized === "m" ||
-    normalized === "meter" ||
-    normalized === "meters" ||
-    normalized === "metre" ||
-    normalized === "metres"
-  ) {
-    return 1;
-  }
+  // Metre-based and unknown units both default to no scaling for backward
+  // compatibility with existing projected grids.
   return 1;
 }
 

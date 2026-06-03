@@ -258,11 +258,16 @@ async function resolveLatLon2D(
         props.datasources,
         varnameSelector.value
       );
+      if (!longitudes) {
+        throw new Error(
+          "Provided auxiliary longitude coordinates were not available."
+        );
+      }
       const [nj, ni] = latitudes.shape;
       polarAspectRatio.value = ni / nj;
       return {
         latitudesData: latitudes.data as Float64Array,
-        longitudesData: longitudes!.data as Float64Array,
+        longitudesData: longitudes.data as Float64Array,
         nj,
         ni,
       };
