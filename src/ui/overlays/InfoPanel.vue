@@ -88,9 +88,14 @@ function toNumber(value: number | bigint): number {
  */
 async function fetchTimeData(
   varSource: { store: string; dataset: string },
-  timeDimName: string
+  timeDimName: string,
+  format?: TSources["zarr_format"]
 ) {
-  const timeVar = await ZarrDataManager.getVariableInfo(varSource, timeDimName);
+  const timeVar = await ZarrDataManager.getVariableInfo(
+    varSource,
+    timeDimName,
+    format
+  );
 
   const units = (timeVar.attrs?.units as string) || "unknown";
   const calendar = (timeVar.attrs?.calendar as string) || "standard";
@@ -169,7 +174,8 @@ async function getTimeDimensionInfo() {
     );
     timeInfo.value = await fetchTimeData(
       timeReference.datasource,
-      timeReference.variable
+      timeReference.variable,
+      props.datasources.zarr_format
     );
   } catch (err) {
     logError(err);

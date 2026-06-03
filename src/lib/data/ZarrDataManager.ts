@@ -275,9 +275,10 @@ export class ZarrDataManager {
   static async getVariableData(
     datasource: TDatasetSource,
     variable: string,
-    selection?: (number | null | zarr.Slice)[]
+    selection?: (number | null | zarr.Slice)[],
+    format?: TZarrFormat
   ) {
-    const array = await this.getVariableInfo(datasource, variable);
+    const array = await this.getVariableInfo(datasource, variable, format);
     if (selection && selection.length > 0) {
       return await zarr.get(array, selection);
     }

@@ -65,13 +65,15 @@ export function useGridDataAccess() {
         await ZarrDataManager.getVariableData(
           myDatasource,
           timeReference.variable,
-          [null]
+          [null],
+          datasources.zarr_format
         )
       ).data as Int32Array;
 
       const timevar = await ZarrDataManager.getVariableInfo(
         myDatasource,
-        timeReference.variable
+        timeReference.variable,
+        datasources.zarr_format
       );
       return {
         values: timevalues,
@@ -86,7 +88,8 @@ export function useGridDataAccess() {
   async function getDimensionInfo(
     datasource: TDataSource,
     dimension: TDimensionRange,
-    index: number
+    index: number,
+    format?: TSources["zarr_format"]
   ): Promise<TDimInfo> {
     try {
       const dimensionName = dimension?.name;
@@ -97,7 +100,8 @@ export function useGridDataAccess() {
       const dimArray = await ZarrDataManager.getVariableData(
         datasource,
         dimensionName,
-        [null]
+        [null],
+        format
       );
 
       type TCoordinateValue = number | bigint | string;
@@ -121,7 +125,8 @@ export function useGridDataAccess() {
 
       const dimvar = await ZarrDataManager.getVariableInfo(
         datasource,
-        dimensionName
+        dimensionName,
+        format
       );
       return {
         values: dimValues,

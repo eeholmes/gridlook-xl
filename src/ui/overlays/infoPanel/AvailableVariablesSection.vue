@@ -81,10 +81,15 @@ function getDefaultAttributesVariableName(datasources?: TSources) {
 async function loadVariableMetadata(
   loadId: number,
   name: string,
-  source: TDataSource
+  source: TDataSource,
+  format?: TSources["zarr_format"]
 ) {
   try {
-    const variable = await ZarrDataManager.getVariableInfo(source, name);
+    const variable = await ZarrDataManager.getVariableInfo(
+      source,
+      name,
+      format
+    );
     if (loadId !== metadataLoadId) {
       return;
     }
@@ -125,7 +130,9 @@ async function loadAllVariableMetadata(datasources?: TSources) {
     entries.map(([name, source]) => [name, getInitialMetadata(source)])
   );
   await Promise.all(
-    entries.map(([name, source]) => loadVariableMetadata(loadId, name, source))
+    entries.map(([name, source]) =>
+      loadVariableMetadata(loadId, name, source, datasources.zarr_format)
+    )
   );
 }
 

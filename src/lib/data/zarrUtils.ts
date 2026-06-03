@@ -279,11 +279,13 @@ async function fetchLatLonVariables(
   const [latitudesVar, longitudesVar] = await Promise.all([
     ZarrDataManager.getVariableInfo(
       latitudeReference.datasource,
-      latitudeReference.variable
+      latitudeReference.variable,
+      datasources.zarr_format
     ),
     ZarrDataManager.getVariableInfo(
       longitudeReference.datasource,
-      longitudeReference.variable
+      longitudeReference.variable,
+      datasources.zarr_format
     ).catch(() => null),
   ]);
 
@@ -555,8 +557,16 @@ export async function getXYCoordinatesAsLatLon(
   );
 
   const [xArray, yArray] = await Promise.all([
-    ZarrDataManager.getVariableInfo(xRef.datasource, xRef.variable),
-    ZarrDataManager.getVariableInfo(yRef.datasource, yRef.variable),
+    ZarrDataManager.getVariableInfo(
+      xRef.datasource,
+      xRef.variable,
+      datasources.zarr_format
+    ),
+    ZarrDataManager.getVariableInfo(
+      yRef.datasource,
+      yRef.variable,
+      datasources.zarr_format
+    ),
   ]);
 
   const [xData, yData] = await Promise.all([
@@ -783,8 +793,16 @@ export async function computePolarStereoLatLon2D(
   );
 
   const [xArray, yArray] = await Promise.all([
-    ZarrDataManager.getVariableInfo(xRef.datasource, xRef.variable),
-    ZarrDataManager.getVariableInfo(yRef.datasource, yRef.variable),
+    ZarrDataManager.getVariableInfo(
+      xRef.datasource,
+      xRef.variable,
+      datasources.zarr_format
+    ),
+    ZarrDataManager.getVariableInfo(
+      yRef.datasource,
+      yRef.variable,
+      datasources.zarr_format
+    ),
   ]);
 
   const [xData, yData, { isNorthPole, centralMeridian }] = await Promise.all([

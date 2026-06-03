@@ -247,7 +247,8 @@ export function useSharedGridLogic() {
         return getDimensionInfo(
           datasources.levels[0].datasources[currentVariable],
           dim!,
-          dimSlidersValues[i] as number
+          dimSlidersValues[i] as number,
+          datasources.zarr_format
         );
       })
     );
