@@ -258,6 +258,30 @@ function applyScaleFactor(
   }
 }
 
+/**
+ * Convert coordinate unit labels to a multiplier that scales values to metres.
+ *
+ * Unscaled metre-based units return 1, while kilometre-based units return 1000.
+ * Unknown units fall back to 1 so existing metre-based grids continue to work.
+ */
+function coordinateUnitsToMetersFactor(units?: unknown) {
+  const normalized =
+    typeof units === "string" ? units.trim().toLowerCase() : "";
+  const defaultUnitScale = 1;
+  if (
+    normalized === "km" ||
+    normalized === "kilometer" ||
+    normalized === "kilometers" ||
+    normalized === "kilometre" ||
+    normalized === "kilometres"
+  ) {
+    return 1000;
+  }
+  // Metre-based and unknown units both default to no scaling for backward
+  // compatibility with existing projected grids.
+  return defaultUnitScale;
+}
+
 async function fetchLatLonVariables(
   datasources: TSources,
   currentVarname: string,
@@ -566,6 +590,8 @@ export async function getXYCoordinatesAsLatLon(
 
   const crs = await ZarrDataManager.getCRSInfo(datasources, currentVarname);
   const crsWkt = String(crs.attrs?.crs_wkt ?? crs.attrs?.spatial_ref ?? "");
+  const xScale = coordinateUnitsToMetersFactor(xArray.attrs?.units);
+  const yScale = coordinateUnitsToMetersFactor(yArray.attrs?.units);
 
   if (isWebMercatorCRS(crsWkt)) {
     const xRaw = castDataVarToFloat32(xData.data);
@@ -573,10 +599,10 @@ export async function getXYCoordinatesAsLatLon(
     const longitudes = new Float64Array(xRaw.length);
     const latitudes = new Float64Array(yRaw.length);
     for (let i = 0; i < xRaw.length; i++) {
-      longitudes[i] = webMercatorXToLon(xRaw[i]);
+      longitudes[i] = webMercatorXToLon(xRaw[i] * xScale);
     }
     for (let i = 0; i < yRaw.length; i++) {
-      latitudes[i] = webMercatorYToLat(yRaw[i]);
+      latitudes[i] = webMercatorYToLat(yRaw[i] * yScale);
     }
     return { latitudes, longitudes };
   }
@@ -797,6 +823,8 @@ export async function computePolarStereoLatLon2D(
   const yRaw = castDataVarToFloat32(yData.data); // 1-D, length ny
   const nx = xRaw.length;
   const ny = yRaw.length;
+  const xScale = coordinateUnitsToMetersFactor(xArray.attrs?.units);
+  const yScale = coordinateUnitsToMetersFactor(yArray.attrs?.units);
 
   const latitudes2D = new Float64Array(ny * nx);
   const longitudes2D = new Float64Array(ny * nx);
@@ -804,8 +832,8 @@ export async function computePolarStereoLatLon2D(
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) {
       const { lat, lon } = invPolarStereoPoint(
-        xRaw[i],
-        yRaw[j],
+        xRaw[i] * xScale,
+        yRaw[j] * yScale,
         isNorthPole,
         centralMeridian
       );
