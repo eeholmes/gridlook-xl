@@ -261,7 +261,7 @@ function applyScaleFactor(
 /**
  * Convert coordinate unit labels to a multiplier that scales values to metres.
  *
- * Unscaled meter-based units return 1, while kilometre-based units return 1000.
+ * Unscaled metre-based units return 1, while kilometre-based units return 1000.
  * Unknown units fall back to 1 so existing metre-based grids continue to work.
  */
 function coordinateUnitsToMetersFactor(units?: unknown) {
