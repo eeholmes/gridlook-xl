@@ -80,6 +80,12 @@ const polarBoxStyle = computed(() =>
 );
 /** True when `isPolarStereoData` and the selected projection is incompatible with polar data. */
 const showPolarError = computed(() => {
+  // Temporarily allow user to select all grids for polar crs.
+  const allowRobinsonForPolarGrids = true;
+  if (allowRobinsonForPolarGrids) {
+    return false;
+  }
+
   if (!isPolarStereoData.value) {
     return false;
   }
