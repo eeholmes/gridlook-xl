@@ -444,6 +444,16 @@ export class ZarrDataManager {
       return { datasource: matchedSource, variable: matchedVarname };
     }
 
+    const leafNameMatch = Object.entries(levelDatasources).find(
+      ([varname]) =>
+        (this.normalizeVariablePath(varname).split("/").pop() ?? varname) ===
+        targetLeafName
+    );
+    if (leafNameMatch) {
+      const [matchedVarname, matchedSource] = leafNameMatch;
+      return { datasource: matchedSource, variable: matchedVarname };
+    }
+
     return { datasource: currentSource, variable: normalizedTarget };
   }
 

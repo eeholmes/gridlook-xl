@@ -90,62 +90,72 @@ export function hasUnits(
   return typeof (maybeHasUnits as { units: string }).units === "string";
 }
 
+function getLeafName(name: string) {
+  return name.split("/").pop() ?? name;
+}
+
 export function isLongitudeVariable(name: string, attrs: unknown) {
+  const leafName = getLeafName(name);
   return (
     (hasUnits(attrs) && !!attrs.units.match(/degrees?_?(E|east)/)) ||
-    name === "lon" ||
-    name === "longitude"
+    leafName === "lon" ||
+    leafName === "longitude"
   );
 }
 
 export function isLongitudeName(name: string) {
   // FIXME: Need to check for unit later
   // having "rlon" here is a workaround to catch rotated regular grids if the have no CRS-var
-  return name === "lon" || name === "longitude" || name === "rlon";
+  const leafName = getLeafName(name);
+  return leafName === "lon" || leafName === "longitude" || leafName === "rlon";
 }
 
 export function isXName(name: string) {
-  return name === "x";
+  return getLeafName(name) === "x";
 }
 
 export function isYName(name: string) {
-  return name === "y";
+  return getLeafName(name) === "y";
 }
 
 export function isLatitudeVariable(name: string, attrs: unknown) {
+  const leafName = getLeafName(name);
   return (
     (hasUnits(attrs) && !!attrs.units.match(/degrees?_?(N|north)/)) ||
-    name === "lat" ||
-    name === "latitude"
+    leafName === "lat" ||
+    leafName === "latitude"
   );
 }
 export function isLatitudeName(name: string) {
   // FIXME: Need to check for unit later
   // having "rlat" here is a workaround to catch rotated regular grids if the have no CRS-var
-  return name === "lat" || name === "latitude" || name === "rlat";
+  const leafName = getLeafName(name);
+  return leafName === "lat" || leafName === "latitude" || leafName === "rlat";
 }
 
 function lonPriority(name: string) {
-  if (name === "rlon") {
+  const leafName = getLeafName(name);
+  if (leafName === "rlon") {
     return 0;
   }
-  if (name === "lon") {
+  if (leafName === "lon") {
     return 1;
   }
-  if (name === "longitude") {
+  if (leafName === "longitude") {
     return 2;
   }
   return 3;
 }
 
 function latPriority(name: string) {
-  if (name === "rlat") {
+  const leafName = getLeafName(name);
+  if (leafName === "rlat") {
     return 0;
   }
-  if (name === "lat") {
+  if (leafName === "lat") {
     return 1;
   }
-  if (name === "latitude") {
+  if (leafName === "latitude") {
     return 2;
   }
   return 3;
@@ -161,7 +171,7 @@ function resolveLatLonFromCoordinates(
   let latitudeName: string | null = null;
   let longitudeName: string | null = null;
   if (coordinates) {
-    for (const coordName of coordinates.split(" ")) {
+    for (const coordName of coordinates.split(/[\s,]+/)) {
       if (isLatitudeName(coordName)) {
         latitudeName = coordName;
       } else if (isLongitudeName(coordName)) {
