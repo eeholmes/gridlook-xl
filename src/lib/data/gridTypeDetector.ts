@@ -74,10 +74,42 @@ function checkRegularRotatedGrid(
 }
 
 function checkCurvilinear(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   latitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   longitudesVar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
 ) {
-  return latitudesVar.shape.length === 2 && longitudesVar.shape.length === 2;
+  if (latitudesVar.shape.length !== 2 || longitudesVar.shape.length !== 2) {
+    return false;
+  }
+  if (
+    latitudesVar.shape[0] !== longitudesVar.shape[0] ||
+    latitudesVar.shape[1] !== longitudesVar.shape[1]
+  ) {
+    return false;
+  }
+
+  const spatialDimensions = (
+    datavar.dimensionNames as string[] | undefined
+  )?.filter((dimName) => dimName.toLowerCase() !== "time");
+  if (!spatialDimensions || spatialDimensions.length < 2) {
+    return true;
+  }
+
+  const expectedDimensions = spatialDimensions.slice(-2);
+  return (
+    sameDimensionNames(latitudesVar.dimensionNames, expectedDimensions) &&
+    sameDimensionNames(longitudesVar.dimensionNames, expectedDimensions)
+  );
+}
+
+function sameDimensionNames(
+  left: readonly string[] | undefined,
+  right: readonly string[]
+) {
+  if (!Array.isArray(left) || left.length !== right.length) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
 }
 
 function checkGaussianGrid(latitudes: Float64Array, longitudes: Float64Array) {
@@ -180,7 +212,7 @@ async function determineGridTypeFromData(
   }
 
   // Curvilinear grids have 2-D lat/lon arrays — detectable from shape alone.
-  if (checkCurvilinear(latitudesVar, longitudesVar)) {
+  if (checkCurvilinear(datavar, latitudesVar, longitudesVar)) {
     return GRID_TYPES.CURVILINEAR;
   }
 

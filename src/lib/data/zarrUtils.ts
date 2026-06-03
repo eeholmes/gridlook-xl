@@ -161,6 +161,55 @@ function latPriority(name: string) {
   return 3;
 }
 
+function sameDimensionNames(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+) {
+  if (
+    !Array.isArray(left) ||
+    !Array.isArray(right) ||
+    left.length !== right.length
+  ) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
+}
+
+function getSpatialDimensionNames(
+  datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>
+) {
+  return (
+    (datavar.dimensionNames as string[] | undefined)?.filter(
+      (dimName) => dimName.toLowerCase() !== "time"
+    ) ?? []
+  );
+}
+
+function findExactLatLonNamesFromSources(
+  sources: TSources["levels"][0]["datasources"],
+  spatialDimensions: readonly string[]
+): { latitudeName: string | null; longitudeName: string | null } {
+  let latitudeName: string | null = null;
+  let longitudeName: string | null = null;
+
+  for (const sourceKey in sources) {
+    const source = sources[sourceKey];
+    const dimensions = source.attrs?.dimensionNames as string[] | undefined;
+    if (!sameDimensionNames(dimensions, spatialDimensions)) {
+      continue;
+    }
+
+    if (isLatitudeVariable(sourceKey, source.attrs)) {
+      latitudeName = sourceKey;
+    }
+    if (isLongitudeVariable(sourceKey, source.attrs)) {
+      longitudeName = sourceKey;
+    }
+  }
+
+  return { latitudeName, longitudeName };
+}
+
 function resolveLatLonFromCoordinates(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   isRotated: boolean
@@ -249,6 +298,13 @@ function findLatLonNames(
       datasources.levels[0].datasources,
       latitudeName,
       longitudeName
+    ));
+  }
+
+  if (!latitudeName || !longitudeName) {
+    ({ latitudeName, longitudeName } = findExactLatLonNamesFromSources(
+      datasources.levels[0].datasources,
+      getSpatialDimensionNames(datavar)
     ));
   }
 
