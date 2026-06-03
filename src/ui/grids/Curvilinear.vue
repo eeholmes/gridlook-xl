@@ -252,18 +252,34 @@ async function resolveLatLon2D(
   }
 
   if (isPolarStereo) {
-    const result = await computePolarStereoLatLon2D(
-      props.datasources!,
-      varnameSelector.value
-    );
-    // Update aspect ratio to match actual grid dimensions (nx / ny).
-    polarAspectRatio.value = result.nx / result.ny;
-    return {
-      latitudesData: result.latitudes2D,
-      longitudesData: result.longitudes2D,
-      nj: result.ny,
-      ni: result.nx,
-    };
+    try {
+      const { latitudes, longitudes } = await getLatLonData(
+        datavar,
+        props.datasources,
+        varnameSelector.value
+      );
+      const [nj, ni] = latitudes.shape;
+      polarAspectRatio.value = ni / nj;
+      return {
+        latitudesData: latitudes.data as Float64Array,
+        longitudesData: longitudes!.data as Float64Array,
+        nj,
+        ni,
+      };
+    } catch {
+      const result = await computePolarStereoLatLon2D(
+        props.datasources!,
+        varnameSelector.value
+      );
+      // Update aspect ratio to match actual grid dimensions (nx / ny).
+      polarAspectRatio.value = result.nx / result.ny;
+      return {
+        latitudesData: result.latitudes2D,
+        longitudesData: result.longitudes2D,
+        nj: result.ny,
+        ni: result.nx,
+      };
+    }
   }
 
   const { latitudes, longitudes } = await getLatLonData(
