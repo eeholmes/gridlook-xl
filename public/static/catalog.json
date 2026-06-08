@@ -303,7 +303,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "AOML Oceanographic Demo Dataset (2012)",
+      "title": "Broken - AOML Oceanographic Demo Dataset (2012)",
       "url": "icechunk+https://data.source.coop/bkr/aoml/aoml_2012.icechunk",
       "format": "Zarr v3",
       "access": "icechunk",
