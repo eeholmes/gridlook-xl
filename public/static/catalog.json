@@ -691,6 +691,16 @@
       "layout": "simple",
       "grid": "polar_stereographic",
       "crs": "EPSG:3413"        
-    }
+    },
+    {
+      "title": "Normalized Difference Vegetation Index (NDVI) test",
+      "url": "https://data.source.coop/eeholmes/chlaz/icechunk",
+      "format": "Zarr v3",
+      "access": "icechunk",
+      "convention": null,
+      "layout": "simple",
+      "grid": "regular",
+      "crs": "EPSG:4326"        
+    },
   ]
 }
