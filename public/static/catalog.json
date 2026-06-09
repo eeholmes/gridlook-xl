@@ -303,7 +303,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "Broken - AOML Oceanographic Demo Dataset (2012)",
+      "title": "AOML Oceanographic Demo Dataset (2012)",
       "url": "icechunk+https://data.source.coop/bkr/aoml/aoml_2012.icechunk",
       "format": "Zarr v3",
       "access": "icechunk",
@@ -463,7 +463,7 @@
       "crs": "EPSG:4326"
     },
     {    
-      "title": "Broken - SILAM Global Dust Model Forecasts - Dust",
+      "title": "SILAM Global Dust Model Forecasts - Dust",
       "url": "https://data.source.coop/bkr/silam-dust/data.zarr",
       "format": "Zarr v2",
       "access": "direct",
@@ -683,7 +683,7 @@
       "crs": "EPSG:4326"
     },
     {
-      "title": "Alaska HRRR",
+      "title": "",
       "url": "https://data.source.coop/bkr/dmi/alaska_hrrr.icechunk::catalog=static/catalog.json::projectionCenterLat=0::projectionCenterLon=0::varname=10_metre_u_wind_component_at_10.0m::dimIndices_time=0::dimIndices_step=0::camerastate=Jcw5DsJAEETRuzgej7q7euUqiICAwInNYiLE3RnkoJL60vtM9-217Mu2TqfznB0I8gwhUStom6UzFRjlmZXkkY3RzdxLTMnK_NKmx_u6357rwVAXIQqgSj3VTIdDnYMhKVzKgI30Py2rRFyRNFbcqIdFOMyZODQG__0B::dimIndices_level=0::projection=nearside_perspective",
       "format": "Zarr v3",
       "access": "icechunk",
@@ -691,16 +691,6 @@
       "layout": "simple",
       "grid": "polar_stereographic",
       "crs": "EPSG:3413"        
-    },
-    {
-      "title": "Normalized Difference Vegetation Index (NDVI) test",
-      "url": "https://data.source.coop/eeholmes/chlaz/icechunk",
-      "format": "Zarr v3",
-      "access": "icechunk",
-      "convention": null,
-      "layout": "simple",
-      "grid": "regular",
-      "crs": "EPSG:4326"        
     }
   ]
 }
