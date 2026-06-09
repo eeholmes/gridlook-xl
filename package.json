@@ -42,7 +42,7 @@
     "fflate": "^0.8.2",
     "geokdbush": "^2.1.0",
     "humanize-duration": "^3.33.2",
-    "icechunk-js": "^0.4.0",
+    "icechunk-js": "github:eeholmes/icechunk-js#virtual-dist-only",
     "kdbush": "^4.0.2",
     "lodash.debounce": "4.0.8",
     "pinia": "^3.0.4",
