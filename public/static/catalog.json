@@ -701,6 +701,6 @@
       "layout": "simple",
       "grid": "regular",
       "crs": "EPSG:4326"        
-    },
+    }
   ]
 }
