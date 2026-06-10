@@ -130,29 +130,6 @@ function createDimensionRanges(
   return indices;
 }
 
-function calculateIndices(
-  dimensionRanges: NonNullable<TDimensionRange[]>,
-  oldSliderValues: (number | null)[],
-  oldDimRanges: TDimensionRange[] | undefined
-) {
-  const indices: (number | null | zarr.Slice)[] = [];
-  for (let i = 0; i < dimensionRanges.length; i++) {
-    const dimension = dimensionRanges[i];
-    const sliderValue = oldSliderValues[i];
-    if (dimension === null) {
-      indices.push(null);
-    } else if (
-      dimension?.name === oldDimRanges?.[i]?.name &&
-      dimension?.maxBound === oldDimRanges?.[i]?.maxBound
-    ) {
-      indices.push(sliderValue);
-    } else {
-      indices.push(dimension.startPos);
-    }
-  }
-  return indices;
-}
-
 export function buildDimensionRangesAndIndices(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   dimensionNames: string[] | undefined,
@@ -161,7 +138,6 @@ export function buildDimensionRangesAndIndices(
   presetMaxBounds: Record<string, string>,
   oldSliderValues: (number | null)[] | null,
   indicesToIgnore: number[],
-  oldDimRanges: TDimensionRange[] | undefined,
   keepOldValues: boolean
 ) {
   let dimensionRanges: TDimensionRange[] = [];
@@ -174,24 +150,17 @@ export function buildDimensionRangesAndIndices(
     indicesToIgnore
   );
   let indices: (number | null | zarr.Slice)[] = [];
-  if (
-    oldSliderValues === null ||
-    // just a security measure, we should not reach this case
-    // and expect oldSliderValues to have the same length as oldDimRanges
-    oldSliderValues.length !== oldDimRanges?.length
-  ) {
-    // Initial loading
+  if (keepOldValues && oldSliderValues !== null) {
+    indices = oldSliderValues;
+  } else {
+    // Initial loading should always start from the displayed slice, not any
+    // previously cached slider values from another variable.
     indices = dimensionRanges.map((d) => {
       if (d === null) {
         return null;
-      } else {
-        return d.startPos;
       }
+      return d.startPos;
     });
-  } else if (keepOldValues) {
-    indices = oldSliderValues;
-  } else {
-    indices = calculateIndices(dimensionRanges, oldSliderValues, oldDimRanges);
   }
   return {
     dimensionRanges,

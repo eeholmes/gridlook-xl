@@ -989,7 +989,6 @@ async function fetchAndRenderData(
     paramDimMaxBounds.value,
     dimSlidersValues.value.length > 0 ? dimSlidersValues.value : null,
     [datavar.shape.length - 2, datavar.shape.length - 1],
-    varinfo.value?.dimRanges,
     false
   );
 

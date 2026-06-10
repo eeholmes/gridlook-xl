@@ -449,7 +449,6 @@ async function buildDimensionConfig(
     paramDimMaxBounds.value,
     dimSlidersValues.value.length > 0 ? dimSlidersValues.value : null,
     geoDims,
-    varinfo.value?.dimRanges,
     updateMode === UPDATE_MODE.SLIDER_TOGGLE
   );
   return { latitudes, longitudes, dimensionRanges, indices };

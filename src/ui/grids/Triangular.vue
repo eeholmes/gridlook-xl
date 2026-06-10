@@ -435,7 +435,6 @@ async function buildDimensionConfig(
     paramDimMaxBounds.value,
     dimSlidersValues.value.length > 0 ? dimSlidersValues.value : null,
     [datavar.shape.length - 1],
-    varinfo.value?.dimRanges,
     updateMode === UPDATE_MODE.SLIDER_TOGGLE
   );
 }
