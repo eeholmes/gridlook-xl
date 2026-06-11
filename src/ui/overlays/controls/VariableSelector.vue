@@ -24,8 +24,9 @@ const allVisibleVariables = computed(() => {
 
 /**
  * Collect all unique group paths (everything before the last "/") across all
- * visible variables and return them sorted.  When both root-level variables
- * and grouped variables exist, include the root group as "/" first.
+ * visible variables and return them sorted. Only expose group selection when
+ * both root-level variables and grouped variables exist; in that case include
+ * the root group as "/" first.
  */
 const allGroupPaths = computed(() => {
   const paths = new Set<string>();
@@ -39,10 +40,12 @@ const allGroupPaths = computed(() => {
     }
   }
   const sortedPaths = Array.from(paths).sort();
-  return hasRootVariables ? ["/", ...sortedPaths] : sortedPaths;
+  return hasRootVariables && sortedPaths.length > 0
+    ? ["/", ...sortedPaths]
+    : [];
 });
 
-/** Whether the dataset has any grouped variables at all. */
+/** Whether the group selector should be shown. */
 const hasGroups = computed(() => allGroupPaths.value.length > 0);
 
 const selectedGroup = ref<string | null>(null);
