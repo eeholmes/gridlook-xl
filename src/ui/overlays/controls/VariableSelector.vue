@@ -24,18 +24,24 @@ const allVisibleVariables = computed(() => {
 
 /**
  * Collect all unique group paths (everything before the last "/") across all
- * visible variables and return them sorted.  Variables with no "/" prefix are
- * root-level and contribute no group path.
+ * visible variables and return them sorted.  When both root-level variables
+ * and grouped variables exist, include the root group as "/" first.
  */
 const allGroupPaths = computed(() => {
   const paths = new Set<string>();
+  let hasRootVariables = false;
   for (const varname of allVisibleVariables.value) {
     const slashIdx = varname.lastIndexOf("/");
     if (slashIdx > 0) {
       paths.add(varname.slice(0, slashIdx));
+    } else {
+      hasRootVariables = true;
     }
   }
-  return Array.from(paths).sort();
+  const sortedPaths = Array.from(paths).sort();
+  return hasRootVariables && sortedPaths.length > 0
+    ? ["/", ...sortedPaths]
+    : sortedPaths;
 });
 
 /** Whether the dataset has any grouped variables at all. */
@@ -63,9 +69,11 @@ const variableOptions = computed(() => {
   const prefix = selectedGroup.value;
   return allVisibleVariables.value.filter((varname) => {
     const slashIdx = varname.lastIndexOf("/");
+    if (prefix === "/") {
+      return slashIdx <= 0;
+    }
     if (slashIdx <= 0) {
-      // Root-level variable — always included regardless of group selection.
-      return true;
+      return false;
     }
     return varname.slice(0, slashIdx) === prefix;
   });
