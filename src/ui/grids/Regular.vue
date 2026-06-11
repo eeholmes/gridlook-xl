@@ -888,6 +888,29 @@ async function buildDimensionConfig(
   );
 }
 
+type TDecodedChunkData =
+  | unknown[]
+  | Uint8Array<ArrayBufferLike>
+  | Int8Array<ArrayBufferLike>
+  | Int16Array<ArrayBufferLike>
+  | Int32Array<ArrayBufferLike>
+  | BigInt64Array<ArrayBufferLike>
+  | Uint16Array<ArrayBufferLike>
+  | Uint32Array<ArrayBufferLike>
+  | BigUint64Array<ArrayBufferLike>
+  | Float32Array<ArrayBufferLike>
+  | Float64Array<ArrayBufferLike>
+  | zarr.BoolArray
+  | zarr.UnicodeStringArray
+  | zarr.ByteStringArray
+  | zarr.Chunk<zarr.DataType>;
+
+/**
+ * Extracts the payload from a decoded zarr.get result.
+ *
+ * Chunk reads usually return `{ data, shape, stride }`, while scalar reads can
+ * return the value directly.
+ */
 function getDecodedChunkData(decodedChunk: unknown) {
   if (
     decodedChunk !== null &&
@@ -918,9 +941,7 @@ async function fetchAndRenderData(
       `Decoded chunk for ${varnameSelector.value} returned no data; codec decode likely failed.`
     );
   }
-  let rawData = castDataVarToFloat32(
-    decodedData as Parameters<typeof castDataVarToFloat32>[0]
-  );
+  let rawData = castDataVarToFloat32(decodedData as TDecodedChunkData);
 
   const { missingValue, fillValue } = getMissingAndFillValues(datavar);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
