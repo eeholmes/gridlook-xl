@@ -888,6 +888,17 @@ async function buildDimensionConfig(
   );
 }
 
+function getDecodedChunkData(decodedChunk: unknown) {
+  if (
+    decodedChunk !== null &&
+    typeof decodedChunk === "object" &&
+    "data" in decodedChunk
+  ) {
+    return (decodedChunk as { data: unknown }).data;
+  }
+  return decodedChunk;
+}
+
 async function fetchAndRenderData(
   datavar: zarr.Array<zarr.DataType, zarr.AsyncReadable>,
   updateMode: TUpdateMode
@@ -897,8 +908,18 @@ async function fetchAndRenderData(
     updateMode
   );
 
+  const decodedChunk = await ZarrDataManager.getVariableDataFromArray(
+    datavar,
+    indices
+  );
+  const decodedData = getDecodedChunkData(decodedChunk);
+  if (decodedData === null || decodedData === undefined) {
+    throw new Error(
+      `Decoded chunk for ${varnameSelector.value} returned no data; codec decode likely failed.`
+    );
+  }
   let rawData = castDataVarToFloat32(
-    (await ZarrDataManager.getVariableDataFromArray(datavar, indices)).data
+    decodedData as Parameters<typeof castDataVarToFloat32>[0]
   );
 
   const { missingValue, fillValue } = getMissingAndFillValues(datavar);
