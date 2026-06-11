@@ -888,22 +888,16 @@ async function buildDimensionConfig(
   );
 }
 
-type TDecodedChunkData =
+type DecodedChunkData =
   | unknown[]
   | Uint8Array<ArrayBufferLike>
   | Int8Array<ArrayBufferLike>
   | Int16Array<ArrayBufferLike>
   | Int32Array<ArrayBufferLike>
-  | BigInt64Array<ArrayBufferLike>
   | Uint16Array<ArrayBufferLike>
   | Uint32Array<ArrayBufferLike>
-  | BigUint64Array<ArrayBufferLike>
   | Float32Array<ArrayBufferLike>
-  | Float64Array<ArrayBufferLike>
-  | zarr.BoolArray
-  | zarr.UnicodeStringArray
-  | zarr.ByteStringArray
-  | zarr.Chunk<zarr.DataType>;
+  | Float64Array<ArrayBufferLike>;
 
 /**
  * Extracts the payload from a decoded zarr.get result.
@@ -911,15 +905,28 @@ type TDecodedChunkData =
  * Chunk reads usually return `{ data, shape, stride }`, while scalar reads can
  * return the value directly.
  */
+function isDecodedChunkData(
+  decodedData: unknown
+): decodedData is DecodedChunkData {
+  return (
+    Array.isArray(decodedData) ||
+    (ArrayBuffer.isView(decodedData) &&
+      !(decodedData instanceof DataView) &&
+      !(decodedData instanceof BigInt64Array) &&
+      !(decodedData instanceof BigUint64Array))
+  );
+}
+
 function getDecodedChunkData(decodedChunk: unknown) {
   if (
     decodedChunk !== null &&
     typeof decodedChunk === "object" &&
     "data" in decodedChunk
   ) {
-    return (decodedChunk as { data: unknown }).data;
+    const decodedData = (decodedChunk as { data: unknown }).data;
+    return isDecodedChunkData(decodedData) ? decodedData : undefined;
   }
-  return decodedChunk;
+  return isDecodedChunkData(decodedChunk) ? decodedChunk : undefined;
 }
 
 async function fetchAndRenderData(
@@ -941,7 +948,7 @@ async function fetchAndRenderData(
       `Decoded chunk for ${varnameSelector.value} returned no data; codec decode likely failed.`
     );
   }
-  let rawData = castDataVarToFloat32(decodedData as TDecodedChunkData);
+  let rawData = castDataVarToFloat32(decodedData);
 
   const { missingValue, fillValue } = getMissingAndFillValues(datavar);
   rawData = mapMissingAndFillToNaN(rawData, missingValue, fillValue);
