@@ -39,9 +39,7 @@ const allGroupPaths = computed(() => {
     }
   }
   const sortedPaths = Array.from(paths).sort();
-  return hasRootVariables && sortedPaths.length > 0
-    ? ["/", ...sortedPaths]
-    : sortedPaths;
+  return hasRootVariables ? ["/", ...sortedPaths] : sortedPaths;
 });
 
 /** Whether the dataset has any grouped variables at all. */
