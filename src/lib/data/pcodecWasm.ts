@@ -192,7 +192,7 @@ export class PcodecDecoder {
       return copied;
     } finally {
       wasm.free_u8_input(inputPtr, bytes.byteLength);
-      wasm.free_u8(outputLenPtr, 4);
+      wasm.free_u8_input(outputLenPtr, 4);
     }
   }
 }

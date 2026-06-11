@@ -28,7 +28,8 @@ macro_rules! export_codec {
             out_len_ptr: *mut u32,
         ) -> *mut u8 {
             let input = unsafe { slice::from_raw_parts(input_ptr, input_len) };
-            let out = simple_compress(input, &Default::default()).expect("compress");
+            let out = simple_compress(input, &Default::default())
+                .expect(concat!("pcodec wasm compress failed for ", stringify!($ty)));
             let mut out = out.into_boxed_slice();
             let len = out.len() as u32;
             let ptr = out.as_mut_ptr();
@@ -46,7 +47,8 @@ macro_rules! export_codec {
             out_len_ptr: *mut u32,
         ) -> *mut $ty {
             let input = unsafe { slice::from_raw_parts(input_ptr, input_len) };
-            let out = simple_decompress::<$ty>(input).expect("decompress");
+            let out = simple_decompress::<$ty>(input)
+                .expect(concat!("pcodec wasm decompress failed for ", stringify!($ty)));
             let mut out = out.into_boxed_slice();
             let len = out.len() as u32;
             let ptr = out.as_mut_ptr();
