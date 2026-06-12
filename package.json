@@ -26,7 +26,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@eeholmes/zarrita-pcodec": "github:eeholmes/zarrita-pcodec",
+    "@eeholmes/zarrita-pcodec": "github:eeholmes/zarrita-pcodec#f9ec9821fe5db7691e9a372b18c6b80022ca5fa9",
     "@fortawesome/fontawesome-free": "^7.2.0",
     "@hscmap/healpix": "^1.4.12",
     "@primevue/themes": "^4.5.4",
