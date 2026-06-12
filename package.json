@@ -26,6 +26,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@eeholmes/zarrita-pcodec": "github:eeholmes/zarrita-pcodec#f9ec9821fe5db7691e9a372b18c6b80022ca5fa9",
     "@fortawesome/fontawesome-free": "^7.2.0",
     "@hscmap/healpix": "^1.4.12",
     "@primevue/themes": "^4.5.4",
@@ -55,7 +56,7 @@
     "vue": "^3.5.33",
     "vue-json-pretty": "^2.6.0",
     "vue-router": "^5.0.6",
-    "zarrita": "^0.7.2"
+    "zarrita": "^0.7.3"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",

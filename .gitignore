@@ -15,8 +15,6 @@ coverage
 *.local
 .vite
 tsconfig.tsbuildinfo
-/tools/pcodec-wasm/target/
-
 /cypress/videos/
 /cypress/screenshots/
 
